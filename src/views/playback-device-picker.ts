@@ -6,6 +6,7 @@ import { html } from 'lit-html';
 import {
     loadPlaybackDevicesStart,
     selectPlaybackDevice,
+    setVolume,
     transferPlaybackDeviceStart,
 } from '../actions/playback-spotify';
 import { isPartyOwnerSelector } from '../selectors/party';
@@ -21,11 +22,13 @@ interface PlaybackDevicePickerProps {
     isSpotifyConnected: boolean;
     selectedDeviceId: string | null;
     transferPlaybackInProgress: boolean;
+    volume: number;
 }
 
 interface PlaybackDevicePickerDispatch {
     refreshDevices: () => void;
     selectDevice: (deviceId: string | null) => void;
+    setVolume: (volume: number) => void;
     transferPlayback: () => void;
 }
 
@@ -91,6 +94,22 @@ const PlaybackDevicePicker = (
             color: #ff9b9b;
         }
 
+        .volume-row {
+            align-items: center;
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .volume-row label {
+            white-space: nowrap;
+        }
+
+        input[type='range'] {
+            accent-color: var(--primary-color);
+            flex: 1;
+        }
+
         .spinner {
             position: relative;
             width: 24px;
@@ -141,6 +160,18 @@ const PlaybackDevicePicker = (
                       <span>Transfer</span>
                   </paper-button>
               </div>
+              <div class="volume-row">
+                  <label>Volume</label>
+                  <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      .value=${String(props.volume)}
+                      @input=${(ev: Event) =>
+                          props.setVolume(Number((ev.target as HTMLInputElement).value))}
+                  />
+                  <span style="color:rgba(255,255,255,0.7);font-size:12px;min-width:32px;text-align:right">${props.volume}%</span>
+              </div>
               ${props.deviceLoadError
                   ? html`<div class="status error">${props.deviceLoadError.message}</div>`
                   : null}
@@ -162,11 +193,13 @@ const mapStateToProps = (state: State): PlaybackDevicePickerProps => ({
     isSpotifyConnected: hasConnectedSpotifyAccountSelector(state),
     selectedDeviceId: state.player.selectedDeviceId,
     transferPlaybackInProgress: state.player.transferPlaybackInProgress,
+    volume: state.player.volume,
 });
 
 const mapDispatchToProps: PlaybackDevicePickerDispatch = {
     refreshDevices: loadPlaybackDevicesStart,
     selectDevice: selectPlaybackDevice,
+    setVolume,
     transferPlayback: transferPlaybackDeviceStart,
 };
 

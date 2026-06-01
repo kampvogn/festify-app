@@ -14,7 +14,8 @@ export type Actions =
     | ReturnType<typeof selectPlaybackDevice>
     | ReturnType<typeof transferPlaybackDeviceStart>
     | ReturnType<typeof transferPlaybackDeviceFinish>
-    | ReturnType<typeof transferPlaybackDeviceFail>;
+    | ReturnType<typeof transferPlaybackDeviceFail>
+    | ReturnType<typeof setVolume>;
 
 export const PLAYER_INIT_FINISH = 'PLAYER_INIT_Finish';
 export const PLAYER_ERROR = 'PLAYER_ERROR';
@@ -106,4 +107,10 @@ export const transferPlaybackDeviceFail = (err: Error) => ({
     type: TRANSFER_PLAYBACK_DEVICE_FAIL as typeof TRANSFER_PLAYBACK_DEVICE_FAIL,
     error: true,
     payload: err,
+});
+
+export const SET_VOLUME = 'SET_VOLUME';
+export const setVolume = (volume: number) => ({
+    type: SET_VOLUME as typeof SET_VOLUME,
+    payload: volume,
 });

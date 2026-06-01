@@ -176,6 +176,7 @@ export interface PlayerState {
     transferPlaybackInProgress: boolean;
     togglingPlayback: boolean;
     togglePlaybackError: Error | null;
+    volume: number;
 }
 
 export interface SettingsViewState {

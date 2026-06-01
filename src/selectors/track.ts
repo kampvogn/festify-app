@@ -50,6 +50,7 @@ export const sortedTracksFactory = (
             return Object.keys(tracks)
                 .map((k) => tracks[k])
                 .filter((t) => t.reference && t.reference.provider && t.reference.id)
+                .filter((t) => !t.played_at)
                 .filter((t) => {
                     const fbId = firebaseTrackIdSelector(t);
                     return !(fbId in meta) || meta[fbId].durationMs <= maxDurationMs;

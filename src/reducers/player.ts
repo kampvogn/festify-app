@@ -14,6 +14,7 @@ import {
     TRANSFER_PLAYBACK_DEVICE_FAIL,
     TRANSFER_PLAYBACK_DEVICE_FINISH,
     TRANSFER_PLAYBACK_DEVICE_START,
+    SET_VOLUME,
 } from '../actions/playback-spotify';
 import { PlayerState } from '../state';
 
@@ -33,6 +34,7 @@ export default function(
         transferPlaybackInProgress: false,
         togglingPlayback: false,
         togglePlaybackError: null,
+        volume: 100,
     },
     action: Actions,
 ): PlayerState {
@@ -94,12 +96,18 @@ export default function(
                     : (activeDevice ? activeDevice.id : null) ||
                       state.localDeviceId ||
                       (action.payload[0] ? action.payload[0].id : null);
+            const selectedDevice = action.payload.find(d => d.id === selected);
+            const volume =
+                selectedDevice != null && selectedDevice.volume_percent != null
+                    ? selectedDevice.volume_percent
+                    : state.volume;
             return {
                 ...state,
                 availableDevices: action.payload,
                 deviceLoadInProgress: false,
                 deviceLoadError: null,
                 selectedDeviceId: selected,
+                volume,
             };
         }
         case LOAD_PLAYBACK_DEVICES_FAIL:
@@ -135,6 +143,11 @@ export default function(
             return {
                 ...state,
                 isCompatible: action.payload,
+            };
+        case SET_VOLUME:
+            return {
+                ...state,
+                volume: action.payload,
             };
         default:
             return state;

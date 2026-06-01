@@ -7,13 +7,14 @@ import {
     transferPlaybackDeviceFinish,
     LOAD_PLAYBACK_DEVICES_START,
     PLAYER_INIT_FINISH,
+    SET_VOLUME,
     TRANSFER_PLAYBACK_DEVICE_START,
 } from '../actions/playback-spotify';
 import { hasConnectedSpotifyAccountSelector } from '../selectors/users';
 import { isPartyOwnerSelector } from '../selectors/party';
 import { State } from '../state';
 import { fetchWithAccessToken } from '../util/spotify-auth';
-import { call, put, select, takeEvery } from 'redux-saga/effects';
+import { call, put, select, takeEvery, takeLatest } from 'redux-saga/effects';
 
 function* refreshPlaybackDevices() {
     try {
@@ -60,6 +61,22 @@ function* transferPlaybackDevice() {
     }
 }
 
+function* applyVolume(action: ReturnType<typeof import('../actions/playback-spotify').setVolume>) {
+    try {
+        const response: Response = yield call(
+            fetchWithAccessToken,
+            `/me/player/volume?volume_percent=${action.payload}`,
+            { method: 'put' },
+        );
+        if (!response.ok && response.status !== 204) {
+            const body = yield response.text();
+            console.warn('Failed to set volume:', body || response.status);
+        }
+    } catch (err) {
+        console.warn('Failed to set volume:', err);
+    }
+}
+
 function* maybeLoadDevices() {
     const state: State = yield select();
     if (!isPartyOwnerSelector(state) || !hasConnectedSpotifyAccountSelector(state)) {
@@ -73,4 +90,5 @@ export default function*() {
     yield takeEvery([OPEN_PARTY_FINISH, PLAYER_INIT_FINISH], maybeLoadDevices);
     yield takeEvery(LOAD_PLAYBACK_DEVICES_START, refreshPlaybackDevices);
     yield takeEvery(TRANSFER_PLAYBACK_DEVICE_START, transferPlaybackDevice);
+    yield takeLatest(SET_VOLUME, applyVolume);
 }

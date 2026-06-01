@@ -1,6 +1,6 @@
 import { LOCATION_CHANGED } from '@festify/redux-little-router';
 import chunk from 'lodash-es/chunk';
-import { call, cancel, put, select, takeEvery, takeLatest } from 'redux-saga/effects';
+import { all, call, cancel, put, select, takeEvery, takeLatest } from 'redux-saga/effects';
 
 import {
     getArtistFanart,
@@ -101,10 +101,12 @@ function* loadMetadataForNewTracks(_) {
     const uncached: string[] = yield select(loadMetadataSelector);
     for (const ids of chunk(uncached, 50).filter(ch => ch.length > 0)) {
         try {
-            const url = `/tracks?market=${country}&ids=${encodeURIComponent(ids.join(','))}`;
-            const resp = yield call(fetchWithAnonymousAuth, url);
-            const { tracks }: SpotifyApi.MultipleTracksResponse = yield resp.json();
-
+            const responses: Response[] = yield all(
+                ids.map(id => call(fetchWithAnonymousAuth, `/tracks/${id}?market=${country}`)),
+            );
+            const tracks: SpotifyApi.TrackObjectFull[] = yield all(
+                responses.map(resp => call([resp, resp.json])),
+            );
             yield put(updateMetadata(tracks));
         } catch (err) {
             console.error('Failed to load metadata for a track chunk.', err);
