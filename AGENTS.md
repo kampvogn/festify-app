@@ -34,6 +34,8 @@ Source of truth:
 
 - Make one logical change per commit when possible.
 - Prefer short, descriptive commit messages that describe the user-visible or architectural change.
+- Commit regularly during a working session — do not let a large batch of unrelated changes accumulate uncommitted.
+- Push to the remote at the end of each meaningful milestone (a working feature, a bug fixed, a phase completed).
 - Use tags for notable milestones only, not every small step.
 - Do not create a release tag unless the code and docs match the intended state.
 - If a change affects deployment or migration behavior, update the relevant docs in the same change.
