@@ -13,6 +13,7 @@ import {
     showCreatePartyForm,
     hideCreatePartyForm,
     endPartyStart,
+    renamePartyStart,
 } from '../actions/view-home';
 import { State, MyParty } from '../state';
 import { currentAuthUser } from '../util/auth';
@@ -47,6 +48,67 @@ interface HomeViewDispatch {
     showCreatePartyForm: () => void;
     hideCreatePartyForm: () => void;
     endParty: (partyId: string) => void;
+    renameParty: (partyId: string, name: string) => void;
+}
+
+// Module-level state for inline rename (ephemeral UI, not worth Redux)
+const renameState: { partyId: string | null; name: string } = { partyId: null, name: '' };
+
+function formatDate(ts: number): string {
+    return new Date(ts).toLocaleDateString('da-DK', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function makeRenameHandlers(p: MyParty, props: HomeViewProps & HomeViewDispatch) {
+    const onInput = (ev: Event) => { renameState.name = (ev.target as HTMLInputElement).value; };
+    const onKeydown = (ev: KeyboardEvent) => {
+        if (ev.key === 'Enter' && renameState.name.trim()) {
+            props.renameParty(p.id, renameState.name.trim());
+            renameState.partyId = null;
+        } else if (ev.key === 'Escape') {
+            renameState.partyId = null;
+        }
+    };
+    const onBlur = () => {
+        if (renameState.name.trim() && renameState.name.trim() !== p.name) {
+            props.renameParty(p.id, renameState.name.trim());
+        }
+        renameState.partyId = null;
+    };
+    const startRename = () => { renameState.partyId = p.id; renameState.name = p.name; };
+    const enter = () => { window.location.href = '/party/' + p.id; };
+    const end = () => { props.endParty(p.id); };
+    return { onInput, onKeydown, onBlur, startRename, enter, end };
+}
+
+function renderNameField(p: MyParty, h: ReturnType<typeof makeRenameHandlers>) {
+    if (renameState.partyId === p.id) {
+        return html`<input
+            class="rename-input"
+            .value=${renameState.name}
+            @input=${h.onInput}
+            @keydown=${h.onKeydown}
+            @blur=${h.onBlur}
+            autofocus
+        />`;
+    }
+    return html`<span class="party-name" title="Click to rename" @click=${h.startRename}>${p.name}</span>`;
+}
+
+function renderPartyRow(p: MyParty, props: HomeViewProps & HomeViewDispatch) {
+    const h = makeRenameHandlers(p, props);
+    const nameField = renderNameField(p, h);
+    return html`
+        <div class="party-row">
+            <div class="party-info">
+                ${nameField}
+                <span class="party-meta">#${p.short_id} · ${formatDate(p.created_at)}</span>
+            </div>
+            <div class="party-actions">
+                <paper-button raised @click=${h.enter}>Enter</paper-button>
+                <paper-button @click=${h.end}>End</paper-button>
+            </div>
+        </div>
+    `;
 }
 
 const PartyList = (props: HomeViewProps & HomeViewDispatch) => {
@@ -59,22 +121,7 @@ const PartyList = (props: HomeViewProps & HomeViewDispatch) => {
     return html`
         ${parties.length > 0 ? html`
             <div class="party-list">
-                ${parties.map(p => html`
-                    <div class="party-row">
-                        <div class="party-info">
-                            <span class="party-name">${p.name}</span>
-                            <span class="party-code">#${p.short_id}</span>
-                        </div>
-                        <div class="party-actions">
-                            <paper-button raised @click=${() => window.location.href = '/party/' + p.id}>
-                                Enter
-                            </paper-button>
-                            <paper-button @click=${() => props.endParty(p.id)}>
-                                End
-                            </paper-button>
-                        </div>
-                    </div>
-                `)}
+                ${parties.map(p => renderPartyRow(p, props))}
             </div>
         ` : null}
 
@@ -214,9 +261,29 @@ const HomeView = (props: HomeViewProps & HomeViewDispatch) => html`
             font-weight: 500;
         }
 
-        .party-code {
+        .party-meta {
             font-size: 13px;
             opacity: 0.6;
+        }
+
+        .party-name {
+            cursor: pointer;
+        }
+
+        .party-name:hover {
+            text-decoration: underline;
+            text-underline-offset: 3px;
+        }
+
+        .rename-input {
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid rgba(255,255,255,0.5);
+            color: inherit;
+            font-size: 16px;
+            font-weight: 500;
+            outline: none;
+            width: 160px;
         }
 
         .party-actions {
@@ -292,6 +359,7 @@ const mapDispatchToProps: HomeViewDispatch = {
     showCreatePartyForm,
     hideCreatePartyForm,
     endParty: endPartyStart,
+    renameParty: renamePartyStart,
 };
 
 customElements.define('view-home', connect(mapStateToProps, mapDispatchToProps)(HomeView));

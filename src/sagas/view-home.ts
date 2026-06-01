@@ -18,9 +18,11 @@ import {
 } from '../actions/party-data';
 import {
     endPartyStart,
+    renamePartyStart,
     setMyParties,
     setMyPartiesLoading,
     END_PARTY_START,
+    RENAME_PARTY_START,
 } from '../actions/view-home';
 import { Views } from '../routing';
 import { PartySettings, State } from '../state';
@@ -129,6 +131,21 @@ function* endParty(ac: ReturnType<typeof endPartyStart>) {
     }
 }
 
+function* renameParty(ac: ReturnType<typeof renamePartyStart>) {
+    const { partyId, name } = ac.payload;
+    try {
+        yield call(backendFunctions.renameParty, partyId, name);
+        // Update the name in the local list without a full reload
+        const { homeView }: State = yield select();
+        const updated = (homeView.myParties || []).map(p =>
+            p.id === partyId ? { ...p, name } : p,
+        );
+        yield put(setMyParties(updated));
+    } catch (err) {
+        yield put(showToast('Could not rename party: ' + err.message, 6000));
+    }
+}
+
 function* onAuthStatusKnown() {
     const { router }: State = yield select();
 
@@ -179,4 +196,5 @@ export default function*() {
     yield takeLatest(CREATE_PARTY_START, createParty);
     yield takeLatest(JOIN_PARTY_START, joinParty);
     yield takeEvery(END_PARTY_START, endParty);
+    yield takeEvery(RENAME_PARTY_START, renameParty);
 }

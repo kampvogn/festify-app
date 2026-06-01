@@ -66,6 +66,22 @@ export interface BackendPartySnapshot {
     userVotes: Record<string, boolean>;
 }
 
+async function patchSelfHosted<T>(path: string, body: object): Promise<CallableResult<T>> {
+    const response = await fetch(backendConfig.apiUrl + path, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || 'Self-hosted backend request failed with ' + response.status);
+    }
+
+    return { data: await response.json() };
+}
+
 async function deleteSelfHosted<T>(path: string): Promise<CallableResult<T>> {
     const response = await fetch(backendConfig.apiUrl + path, {
         method: 'DELETE',
@@ -166,6 +182,10 @@ export const backendFunctions = {
 
     getMyParties(): Promise<CallableResult<MyParty[]>> {
         return getSelfHosted<MyParty[]>('/api/parties/mine');
+    },
+
+    renameParty(partyId: string, name: string): Promise<CallableResult<{ id: string; name: string }>> {
+        return patchSelfHosted<{ id: string; name: string }>('/api/parties/' + encodeURIComponent(partyId), { name });
     },
 
     deleteParty(partyId: string): Promise<CallableResult<{ ok: boolean }>> {

@@ -7,7 +7,8 @@ export type Actions =
     | ReturnType<typeof hideCreatePartyForm>
     | ReturnType<typeof setMyParties>
     | ReturnType<typeof setMyPartiesLoading>
-    | ReturnType<typeof endPartyStart>;
+    | ReturnType<typeof endPartyStart>
+    | ReturnType<typeof renamePartyStart>;
 
 export const CHANGE_PARTY_ID = 'CHANGE_PARTY_ID';
 export const CHANGE_CREATE_PARTY_NAME = 'CHANGE_CREATE_PARTY_NAME';
@@ -16,6 +17,7 @@ export const HIDE_CREATE_PARTY_FORM = 'HIDE_CREATE_PARTY_FORM';
 export const SET_MY_PARTIES = 'SET_MY_PARTIES';
 export const SET_MY_PARTIES_LOADING = 'SET_MY_PARTIES_LOADING';
 export const END_PARTY_START = 'END_PARTY_START';
+export const RENAME_PARTY_START = 'RENAME_PARTY_START';
 
 export const changePartyId = (partyId: string) => ({
     type: CHANGE_PARTY_ID as typeof CHANGE_PARTY_ID,
@@ -48,4 +50,9 @@ export const setMyPartiesLoading = (loading: boolean) => ({
 export const endPartyStart = (partyId: string) => ({
     type: END_PARTY_START as typeof END_PARTY_START,
     payload: partyId,
+});
+
+export const renamePartyStart = (partyId: string, name: string) => ({
+    type: RENAME_PARTY_START as typeof RENAME_PARTY_START,
+    payload: { partyId, name },
 });
