@@ -121,6 +121,19 @@ app.post('/api/auth/signout', async (request, reply) => {
     return { ok: true };
 });
 
+app.get('/api/parties/mine', async (request, reply) => {
+    const user = await requireSessionUser(request);
+    const result = await pool.query(
+        `SELECT id, short_id, name, created_at FROM parties WHERE created_by = $1 ORDER BY created_at DESC LIMIT 1`,
+        [user.id],
+    );
+    if (result.rowCount === 0) {
+        reply.code(404);
+        return { error: 'No party found' };
+    }
+    return result.rows[0];
+});
+
 app.post('/api/parties', async (request) => {
     const user = await requireSessionUser(request);
     return createParty(request.body, user);

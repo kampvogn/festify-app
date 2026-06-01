@@ -5,7 +5,7 @@ import { showToast } from '../actions';
 import { fetchWithAccessToken } from '../util/spotify-auth';
 import { currentAuthUser } from '../util/auth';
 import { isSelfHostedBackend } from '../util/backend';
-import { BackendUser } from '../util/backend-functions';
+import { backendFunctions, BackendUser } from '../util/backend-functions';
 import { NOTIFY_AUTH_STATUS_KNOWN } from '../actions/auth';
 import {
     createNewParty,
@@ -101,7 +101,7 @@ function* joinParty(ac: ReturnType<typeof joinPartyStart>) {
     yield put(push(`/party/${longId}`));
 }
 
-function* warnNonPremium() {
+function* resumeOrWarn() {
     const { router }: State = yield select();
 
     if ((router.result || { view: Views.Home }).view !== Views.Home) {
@@ -110,7 +110,11 @@ function* warnNonPremium() {
 
     if (isSelfHostedBackend) {
         const backendUser = currentAuthUser() as BackendUser | null;
-        if (backendUser && !backendUser.isAnonymous && !backendUser.spotifyIsPremium) {
+        if (!backendUser || backendUser.isAnonymous) {
+            return;
+        }
+
+        if (!backendUser.spotifyIsPremium) {
             yield put(
                 showToast(
                     // tslint:disable-next-line:max-line-length
@@ -118,6 +122,16 @@ function* warnNonPremium() {
                     10000,
                 ),
             );
+            return;
+        }
+
+        try {
+            const { data: party } = yield call(backendFunctions.getMyParty);
+            if (party && party.id) {
+                yield put(push(`/party/${party.id}`));
+            }
+        } catch {
+            // No existing party — stay on home page, user can create one
         }
         return;
     }
@@ -140,7 +154,7 @@ function* warnNonPremium() {
 }
 
 export default function*() {
-    yield takeLatest(NOTIFY_AUTH_STATUS_KNOWN, warnNonPremium);
+    yield takeLatest(NOTIFY_AUTH_STATUS_KNOWN, resumeOrWarn);
     yield takeLatest(CREATE_PARTY_START, createParty);
     yield takeLatest(JOIN_PARTY_START, joinParty);
 }

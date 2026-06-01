@@ -143,6 +143,10 @@ export const backendFunctions = {
         return firebaseFunctions.linkSpotifyAccounts(data);
     },
 
+    getMyParty(): Promise<CallableResult<BackendParty>> {
+        return getSelfHosted<BackendParty>('/api/parties/mine');
+    },
+
     createParty(data: { displayName: string; country: string; settings: any }) {
         return postSelfHosted<BackendParty>('/api/parties', data);
     },
