@@ -36,10 +36,9 @@ export const setVoteAction = (ref: TrackReference, vote: boolean) => ({
 
 export function markTrackAsPlayed(partyId: string, ref: TrackReference): Promise<void> {
     if (isSelfHostedBackend) {
-        return backendFunctions.markTrackAsPlayed({
-            partyId,
-            ref,
-        }).then(() => undefined);
+        // Track cleanup is handled by removeTrackAction when the track ends.
+        // Setting played_at here would immediately hide the track from the queue.
+        return Promise.resolve();
     }
 
     if (!firebase) {
