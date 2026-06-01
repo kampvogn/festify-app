@@ -1,5 +1,5 @@
 import { push } from '@festify/redux-little-router';
-import { call, put, select, takeLatest } from 'redux-saga/effects';
+import { call, put, select, takeEvery, takeLatest } from 'redux-saga/effects';
 
 import { showToast } from '../actions';
 import { fetchWithAccessToken } from '../util/spotify-auth';
@@ -16,11 +16,27 @@ import {
     CREATE_PARTY_START,
     JOIN_PARTY_START,
 } from '../actions/party-data';
+import {
+    endPartyStart,
+    setMyParties,
+    setMyPartiesLoading,
+    END_PARTY_START,
+} from '../actions/view-home';
 import { Views } from '../routing';
 import { PartySettings, State } from '../state';
 
+function* loadMyParties() {
+    yield put(setMyPartiesLoading(true));
+    try {
+        const { data } = yield call(backendFunctions.getMyParties);
+        yield put(setMyParties(data || []));
+    } catch {
+        yield put(setMyParties([]));
+    }
+}
+
 function* createParty() {
-    const { player, user }: State = yield select();
+    const { player, user, homeView }: State = yield select();
     const spotifyProfile = user.credentials.spotify.user;
 
     let userDisplayName = '';
@@ -64,6 +80,8 @@ function* createParty() {
         return;
     }
 
+    const partyName = homeView.createPartyName.trim() || null;
+
     let partyId: string;
     try {
         partyId = yield call(
@@ -72,6 +90,7 @@ function* createParty() {
             player.instanceId,
             userCountry,
             PartySettings.defaultSettings(),
+            partyName,
         );
     } catch (err) {
         yield put(createPartyFail(err));
@@ -101,7 +120,16 @@ function* joinParty(ac: ReturnType<typeof joinPartyStart>) {
     yield put(push(`/party/${longId}`));
 }
 
-function* resumeOrWarn() {
+function* endParty(ac: ReturnType<typeof endPartyStart>) {
+    try {
+        yield call(backendFunctions.deleteParty, ac.payload);
+        yield call(loadMyParties);
+    } catch (err) {
+        yield put(showToast('Could not end party: ' + err.message, 6000));
+    }
+}
+
+function* onAuthStatusKnown() {
     const { router }: State = yield select();
 
     if ((router.result || { view: Views.Home }).view !== Views.Home) {
@@ -125,14 +153,7 @@ function* resumeOrWarn() {
             return;
         }
 
-        try {
-            const { data: party } = yield call(backendFunctions.getMyParty);
-            if (party && party.id) {
-                yield put(push(`/party/${party.id}`));
-            }
-        } catch {
-            // No existing party — stay on home page, user can create one
-        }
+        yield call(loadMyParties);
         return;
     }
 
@@ -154,7 +175,8 @@ function* resumeOrWarn() {
 }
 
 export default function*() {
-    yield takeLatest(NOTIFY_AUTH_STATUS_KNOWN, resumeOrWarn);
+    yield takeLatest(NOTIFY_AUTH_STATUS_KNOWN, onAuthStatusKnown);
     yield takeLatest(CREATE_PARTY_START, createParty);
     yield takeLatest(JOIN_PARTY_START, joinParty);
+    yield takeEvery(END_PARTY_START, endParty);
 }

@@ -117,6 +117,7 @@ export async function createNewParty(
     masterId: string,
     country: string,
     settings: PartySettings,
+    name?: string | null,
  ): Promise<string> {
     const authUser = await requireAuth();
     if (!authUser) {
@@ -128,6 +129,7 @@ export async function createNewParty(
     if (isSelfHostedBackend) {
         const { data } = await backendFunctions.createParty({
             displayName,
+            ...(name ? { name } : {}),
             country,
             settings,
         });

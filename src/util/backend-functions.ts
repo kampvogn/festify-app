@@ -15,6 +15,13 @@ export interface ExchangeCodeResult extends ClientTokenResult {
     tokenType?: string;
 }
 
+export interface MyParty {
+    id: string;
+    name: string;
+    short_id: string;
+    created_at: number;
+}
+
 export interface BackendUser {
     uid: string;
     email: string | null;
@@ -57,6 +64,20 @@ export interface BackendPartySnapshot {
     party: BackendParty;
     tracks: Record<string, BackendTrack>;
     userVotes: Record<string, boolean>;
+}
+
+async function deleteSelfHosted<T>(path: string): Promise<CallableResult<T>> {
+    const response = await fetch(backendConfig.apiUrl + path, {
+        method: 'DELETE',
+        credentials: 'include',
+    });
+
+    if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || 'Self-hosted backend request failed with ' + response.status);
+    }
+
+    return { data: await response.json() };
 }
 
 async function getSelfHosted<T>(path: string): Promise<CallableResult<T>> {
@@ -143,11 +164,15 @@ export const backendFunctions = {
         return firebaseFunctions.linkSpotifyAccounts(data);
     },
 
-    getMyParty(): Promise<CallableResult<BackendParty>> {
-        return getSelfHosted<BackendParty>('/api/parties/mine');
+    getMyParties(): Promise<CallableResult<MyParty[]>> {
+        return getSelfHosted<MyParty[]>('/api/parties/mine');
     },
 
-    createParty(data: { displayName: string; country: string; settings: any }) {
+    deleteParty(partyId: string): Promise<CallableResult<{ ok: boolean }>> {
+        return deleteSelfHosted<{ ok: boolean }>('/api/parties/' + encodeURIComponent(partyId));
+    },
+
+    createParty(data: { displayName: string; name?: string; country: string; settings: any }) {
         return postSelfHosted<BackendParty>('/api/parties', data);
     },
 

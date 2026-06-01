@@ -6,7 +6,14 @@ import {
     JOIN_PARTY_START,
     OPEN_PARTY_START,
 } from '../actions/party-data';
-import { CHANGE_PARTY_ID } from '../actions/view-home';
+import {
+    CHANGE_PARTY_ID,
+    CHANGE_CREATE_PARTY_NAME,
+    SHOW_CREATE_PARTY_FORM,
+    HIDE_CREATE_PARTY_FORM,
+    SET_MY_PARTIES,
+    SET_MY_PARTIES_LOADING,
+} from '../actions/view-home';
 import { HomeViewState } from '../state';
 
 export default function(
@@ -17,6 +24,10 @@ export default function(
         partyJoinInProgress: false,
         partyId: '',
         partyIdValid: false,
+        myParties: null,
+        myPartiesLoading: false,
+        createPartyName: '',
+        showCreateForm: false,
     },
     action: Actions,
 ): HomeViewState {
@@ -27,6 +38,16 @@ export default function(
                 partyId: action.payload,
                 partyIdValid: /[0-9]+/.test(action.payload),
             };
+        case CHANGE_CREATE_PARTY_NAME:
+            return { ...state, createPartyName: action.payload };
+        case SHOW_CREATE_PARTY_FORM:
+            return { ...state, showCreateForm: true, createPartyName: '' };
+        case HIDE_CREATE_PARTY_FORM:
+            return { ...state, showCreateForm: false, createPartyName: '' };
+        case SET_MY_PARTIES:
+            return { ...state, myParties: action.payload, myPartiesLoading: false };
+        case SET_MY_PARTIES_LOADING:
+            return { ...state, myPartiesLoading: action.payload };
         case CREATE_PARTY_START:
             return {
                 ...state,
@@ -55,13 +76,13 @@ export default function(
             if (!state.partyJoinInProgress && !state.partyCreationInProgress) {
                 return state;
             }
-
             return {
                 ...state,
                 partyCreationError: null,
                 partyCreationInProgress: false,
                 partyJoinError: null,
                 partyJoinInProgress: false,
+                showCreateForm: false,
             };
         default:
             return state;

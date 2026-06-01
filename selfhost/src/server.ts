@@ -74,7 +74,7 @@ app.setErrorHandler((error, request, reply) => {
 app.addHook('onRequest', async (request, reply) => {
     reply.header('Access-Control-Allow-Origin', config.publicOrigin);
     reply.header('Access-Control-Allow-Headers', 'content-type, authorization');
-    reply.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    reply.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
     reply.header('Access-Control-Allow-Credentials', 'true');
 
     if (request.method === 'OPTIONS') {
@@ -121,17 +121,32 @@ app.post('/api/auth/signout', async (request, reply) => {
     return { ok: true };
 });
 
-app.get('/api/parties/mine', async (request, reply) => {
+app.get('/api/parties/mine', async (request) => {
     const user = await requireSessionUser(request);
     const result = await pool.query(
-        `SELECT id, short_id, name, created_at FROM parties WHERE created_by = $1 ORDER BY created_at DESC LIMIT 1`,
+        `SELECT id, short_id, name, created_at FROM parties WHERE created_by = $1 ORDER BY created_at DESC`,
         [user.id],
     );
+    return result.rows.map(row => ({
+        id: row.id,
+        short_id: row.short_id,
+        name: row.name,
+        created_at: new Date(row.created_at).getTime(),
+    }));
+});
+
+app.delete('/api/parties/:partyId', async (request, reply) => {
+    const params = z.object({ partyId: z.string().uuid() }).parse(request.params);
+    const user = await requireSessionUser(request);
+    const result = await pool.query(
+        `DELETE FROM parties WHERE id = $1 AND created_by = $2`,
+        [params.partyId, user.id],
+    );
     if (result.rowCount === 0) {
-        reply.code(404);
-        return { error: 'No party found' };
+        reply.code(403);
+        return { error: 'Only the party owner may perform this action.' };
     }
-    return result.rows[0];
+    return { ok: true };
 });
 
 app.post('/api/parties', async (request) => {

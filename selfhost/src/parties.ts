@@ -6,6 +6,7 @@ import { SessionUser } from './session.js';
 
 const createPartySchema = z.object({
     displayName: z.string().min(1),
+    name: z.string().min(1).optional(),
     country: z.string().length(2),
     settings: z.record(z.any()),
 });
@@ -52,6 +53,7 @@ export async function createParty(input: unknown, user: SessionUser) {
     assertAllowedHostEmail(user.email);
 
     const data = createPartySchema.parse(input);
+    const partyName = data.name || possessiveName(data.displayName);
     const playback = {
         last_change: Date.now(),
         last_position_ms: 0,
@@ -66,7 +68,7 @@ export async function createParty(input: unknown, user: SessionUser) {
             `INSERT INTO parties (short_id, created_by, name, country, settings, playback)
              VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING id, short_id, created_by, name, country, settings, playback, created_at`,
-            [shortId, user.id, possessiveName(data.displayName), data.country, data.settings, playback],
+            [shortId, user.id, partyName, data.country, data.settings, playback],
         );
 
         return rowToParty(result.rows[0]);

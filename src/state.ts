@@ -123,6 +123,13 @@ export interface AppShellState {
     currentToast: string | null;
 }
 
+export interface MyParty {
+    id: string;
+    name: string;
+    short_id: string;
+    created_at: number;
+}
+
 export interface HomeViewState {
     partyCreationInProgress: boolean;
     partyCreationError: Error | null;
@@ -130,6 +137,10 @@ export interface HomeViewState {
     partyJoinError: Error | null;
     partyId: string;
     partyIdValid: boolean;
+    myParties: MyParty[] | null;
+    myPartiesLoading: boolean;
+    createPartyName: string;
+    showCreateForm: boolean;
 }
 
 export interface PartyState {

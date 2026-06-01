@@ -1,13 +1,20 @@
 import '@polymer/paper-button/paper-button';
 import '@polymer/paper-input/paper-input';
+import '@polymer/paper-spinner/paper-spinner-lite';
 import '@polymer/polymer/lib/elements/custom-style';
 import { connect } from 'fit-html';
 import { html } from 'lit-html';
 
 import { triggerOAuthLogin } from '../actions/auth';
 import { createPartyStart, joinPartyStart as joinParty } from '../actions/party-data';
-import { changePartyId } from '../actions/view-home';
-import { State } from '../state';
+import {
+    changePartyId,
+    changeCreatePartyName,
+    showCreatePartyForm,
+    hideCreatePartyForm,
+    endPartyStart,
+} from '../actions/view-home';
+import { State, MyParty } from '../state';
 import { currentAuthUser } from '../util/auth';
 import { BackendUser } from '../util/backend-functions';
 import { isSelfHostedBackend } from '../util/backend';
@@ -26,35 +33,94 @@ interface HomeViewProps {
     partyJoinInProgress: boolean;
     playerCompatible: boolean;
     backendUser: BackendUser | null;
+    myParties: MyParty[] | null;
+    myPartiesLoading: boolean;
+    createPartyName: string;
+    showCreateForm: boolean;
 }
 interface HomeViewDispatch {
     changePartyId: (partyId: string) => void;
     createParty: () => void;
     joinParty: () => void;
     loginWithSpotify: () => void;
+    changeCreatePartyName: (name: string) => void;
+    showCreatePartyForm: () => void;
+    hideCreatePartyForm: () => void;
+    endParty: (partyId: string) => void;
 }
+
+const PartyList = (props: HomeViewProps & HomeViewDispatch) => {
+    if (props.myPartiesLoading) {
+        return html`<paper-spinner-lite active></paper-spinner-lite>`;
+    }
+
+    const parties = props.myParties || [];
+
+    return html`
+        ${parties.length > 0 ? html`
+            <div class="party-list">
+                ${parties.map(p => html`
+                    <div class="party-row">
+                        <div class="party-info">
+                            <span class="party-name">${p.name}</span>
+                            <span class="party-code">#${p.short_id}</span>
+                        </div>
+                        <div class="party-actions">
+                            <paper-button raised @click=${() => window.location.href = '/party/' + p.id}>
+                                Enter
+                            </paper-button>
+                            <paper-button @click=${() => props.endParty(p.id)}>
+                                End
+                            </paper-button>
+                        </div>
+                    </div>
+                `)}
+            </div>
+        ` : null}
+
+        ${props.showCreateForm ? html`
+            <div class="create-form">
+                <paper-input
+                    label="Party name"
+                    .value=${props.createPartyName}
+                    @input=${(ev: Event) => props.changeCreatePartyName((ev.target as HTMLInputElement).value)}
+                    @keypress=${(ev: KeyboardEvent) => {
+                        if (ev.key === 'Enter' && props.createPartyName.trim()) {
+                            props.createParty();
+                        }
+                    }}
+                    autofocus
+                >
+                </paper-input>
+                <div class="create-form-buttons">
+                    <paper-button raised
+                        .disabled=${props.partyCreationInProgress || !props.createPartyName.trim()}
+                        @click=${props.createParty}
+                    >
+                        ${props.partyCreationInProgress ? 'Creating...' : 'Create'}
+                    </paper-button>
+                    <paper-button @click=${props.hideCreatePartyForm}>Cancel</paper-button>
+                </div>
+            </div>
+        ` : html`
+            <paper-button raised @click=${props.showCreatePartyForm}>
+                ${parties.length > 0 ? 'New Party' : 'Create Party'}
+            </paper-button>
+        `}
+    `;
+};
 
 const LowerButton = (props: HomeViewProps & HomeViewDispatch) => {
     const isSelfHostedAnonymous = Boolean(props.backendUser && props.backendUser.isAnonymous);
 
-    if (props.partyCreationInProgress) {
-        return html`
-            <paper-button raised disabled>
-                Creating...
-            </paper-button>
-        `;
-    } else if (isSelfHostedAnonymous) {
+    if (isSelfHostedAnonymous) {
         return html`
             <paper-button raised @click=${props.loginWithSpotify}>
                 Login to create party
             </paper-button>
         `;
     } else if (props.authorizedAndPremium) {
-        return html`
-            <paper-button raised @click=${props.createParty}>
-                Create Party
-            </paper-button>
-        `;
+        return PartyList(props);
     } else if (props.authorizationInProgress || !props.authStatusKnown) {
         return html`
             <paper-button raised disabled>
@@ -122,6 +188,52 @@ const HomeView = (props: HomeViewProps & HomeViewDispatch) => html`
         #middle {
             margin: 8px 0 16px 0;
         }
+
+        .party-list {
+            margin: 8px 0;
+            width: 100%;
+        }
+
+        .party-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .party-info {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            text-align: left;
+        }
+
+        .party-name {
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .party-code {
+            font-size: 13px;
+            opacity: 0.6;
+        }
+
+        .party-actions {
+            display: flex;
+            gap: 4px;
+        }
+
+        .create-form {
+            margin-top: 8px;
+            width: 100%;
+        }
+
+        .create-form-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
     </style>
 
     <header>
@@ -176,6 +288,10 @@ const mapDispatchToProps: HomeViewDispatch = {
     createParty: createPartyStart,
     joinParty,
     loginWithSpotify: () => triggerOAuthLogin('spotify'),
+    changeCreatePartyName,
+    showCreatePartyForm,
+    hideCreatePartyForm,
+    endParty: endPartyStart,
 };
 
 customElements.define('view-home', connect(mapStateToProps, mapDispatchToProps)(HomeView));
