@@ -35,6 +35,10 @@ function* changePartySetting(partyId: string, ac: ReturnType<typeof changePartyS
         return;
     }
 
+    if (!firebase) {
+        return;
+    }
+
     yield firebase
         .database()
         .ref('/parties')
@@ -115,6 +119,10 @@ function* insertPlaylist(partyId: string, ac: ReturnType<typeof insertPlaylistSt
 }
 
 function* updatePartyName(partyId: string, ac: ReturnType<typeof updatePartyNameAction>) {
+    if (!firebase) {
+        return;
+    }
+
     yield firebase
         .database()
         .ref('/parties')

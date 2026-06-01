@@ -8,6 +8,9 @@ import { triggerOAuthLogin } from '../actions/auth';
 import { createPartyStart, joinPartyStart as joinParty } from '../actions/party-data';
 import { changePartyId } from '../actions/view-home';
 import { State } from '../state';
+import { currentAuthUser } from '../util/auth';
+import { BackendUser } from '../util/backend-functions';
+import { isSelfHostedBackend } from '../util/backend';
 import festifyLogo from '../util/festify-logo';
 import sharedStyles from '../util/shared-styles';
 
@@ -22,6 +25,7 @@ interface HomeViewProps {
     partyJoinError: Error | null;
     partyJoinInProgress: boolean;
     playerCompatible: boolean;
+    backendUser: BackendUser | null;
 }
 interface HomeViewDispatch {
     changePartyId: (partyId: string) => void;
@@ -31,10 +35,18 @@ interface HomeViewDispatch {
 }
 
 const LowerButton = (props: HomeViewProps & HomeViewDispatch) => {
+    const isSelfHostedAnonymous = Boolean(props.backendUser && props.backendUser.isAnonymous);
+
     if (props.partyCreationInProgress) {
         return html`
             <paper-button raised disabled>
                 Creating...
+            </paper-button>
+        `;
+    } else if (isSelfHostedAnonymous) {
+        return html`
+            <paper-button raised @click=${props.loginWithSpotify}>
+                Login to create party
             </paper-button>
         `;
     } else if (props.authorizedAndPremium) {
@@ -51,8 +63,8 @@ const LowerButton = (props: HomeViewProps & HomeViewDispatch) => {
         `;
     } else {
         return html`
-            <paper-button raised @click=${props.loginWithSpotify}>
-                Login to create Party
+            <paper-button raised disabled>
+                Spotify Premium required
             </paper-button>
         `;
     }
@@ -141,16 +153,23 @@ const HomeView = (props: HomeViewProps & HomeViewDispatch) => html`
 `;
 /* tslint:enable */
 
-const mapStateToProps = (state: State): HomeViewProps => ({
-    ...state.homeView,
-    authorizationInProgress: state.user.credentials.spotify.authorizing,
-    authorizedAndPremium: Boolean(
-        state.user.credentials.spotify.user &&
-            state.user.credentials.spotify.user.product === 'premium',
-    ),
-    authStatusKnown: state.user.credentials.spotify.statusKnown,
-    playerCompatible: state.player.isCompatible,
-});
+const mapStateToProps = (state: State): HomeViewProps => {
+    const backendUser = currentAuthUser() as BackendUser | null;
+
+    return {
+        ...state.homeView,
+        authorizationInProgress: state.user.credentials.spotify.authorizing,
+        authorizedAndPremium: isSelfHostedBackend
+            ? Boolean(backendUser && !backendUser.isAnonymous && backendUser.spotifyIsPremium)
+            : Boolean(
+                  state.user.credentials.spotify.user &&
+                      state.user.credentials.spotify.user.product === 'premium',
+              ),
+        authStatusKnown: state.user.credentials.spotify.statusKnown,
+        playerCompatible: state.player.isCompatible,
+        backendUser,
+    };
+};
 
 const mapDispatchToProps: HomeViewDispatch = {
     changePartyId,

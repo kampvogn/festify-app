@@ -27,6 +27,7 @@ firebase-debug.log
 GoogleService-Info.plist
 google-services.json
 spotify.config.js
+backend.config.js
 service-account.json
 functions/spotify.config.ts
 

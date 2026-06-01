@@ -1,7 +1,7 @@
 import debounce from 'promise-debounce';
 
 import { AuthData } from './auth';
-import { functions } from './firebase';
+import { backendFunctions } from './backend-functions';
 
 export const LOCALSTORAGE_KEY = 'SpotifyAuthData';
 export const SCOPES = [
@@ -37,7 +37,7 @@ async function _requireAccessToken(): Promise<string> {
     }
 
     const { accessToken, expiresIn } = (
-        await functions.refreshToken({ refreshToken: authData.refreshToken })
+        await backendFunctions.refreshToken({ refreshToken: authData.refreshToken })
     ).data;
     authData = new AuthData(accessToken, Date.now() + expiresIn * 1000, authData.refreshToken);
     authData.saveTo(LOCALSTORAGE_KEY);
@@ -53,7 +53,7 @@ async function _requireAnonymousAuth(): Promise<string> {
         return anonymousAccessToken;
     }
 
-    const { data } = await functions.clientToken();
+    const { data } = await backendFunctions.clientToken();
 
     anonymousAccessToken = data.accessToken;
     anonymousExpireTimeMs = Date.now() + data.expiresIn * 1000 - 10000; // Safety margin

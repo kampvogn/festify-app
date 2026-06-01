@@ -1,5 +1,7 @@
 import { ConnectionState, Party, PartySettings, Playback, Track } from '../state';
 import { requireAuth } from '../util/auth';
+import { isSelfHostedBackend } from '../util/backend';
+import { backendFunctions } from '../util/backend-functions';
 import firebase, { firebaseNS } from '../util/firebase';
 
 export type Actions =
@@ -115,8 +117,23 @@ export async function createNewParty(
     masterId: string,
     country: string,
     settings: PartySettings,
-): Promise<string> {
-    const { uid } = await requireAuth();
+ ): Promise<string> {
+    const authUser = await requireAuth();
+    if (!authUser) {
+        throw new Error('Authentication is required to create parties.');
+    }
+
+    const { uid } = authUser;
+
+    if (isSelfHostedBackend) {
+        const { data } = await backendFunctions.createParty({
+            displayName,
+            country,
+            settings,
+        });
+        return data.id;
+    }
+
     const now = firebaseNS.database!.ServerValue.TIMESTAMP;
     const userNamePosessive = displayName.endsWith('s') ? "'" : "'s";
 
@@ -136,6 +153,10 @@ export async function createNewParty(
         short_id: String(Math.floor(Math.random() * 1000000)),
     };
 
+    if (!firebase) {
+        throw new Error('Firebase is unavailable in this build.');
+    }
+
     const result = await firebase
         .database()
         .ref('/parties')
@@ -149,6 +170,15 @@ export async function createNewParty(
 }
 
 export async function resolveShortId(shortId: string): Promise<string | null> {
+    if (isSelfHostedBackend) {
+        const { data } = await backendFunctions.resolveParty(shortId);
+        return data.partyId;
+    }
+
+    if (!firebase) {
+        throw new Error('Firebase is unavailable in this build.');
+    }
+
     const snapshot = await firebase
         .database()
         .ref('/parties')

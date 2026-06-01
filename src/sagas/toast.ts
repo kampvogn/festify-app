@@ -19,12 +19,17 @@ function* displayErrorToast(action: Actions) {
         return;
     }
 
+    const message =
+        action.type === EXCHANGE_CODE_FAIL
+            ? action.payload.data.message
+            : action.payload.message;
+
+    console.error('[Festify]', action.type, message, action);
+
     yield put(
         showToast(
-            action.type === EXCHANGE_CODE_FAIL
-                ? action.payload.data.message
-                : action.payload.message,
-            10000,
+            message,
+            30000,
         ),
     );
 }

@@ -2,6 +2,8 @@ import shuffleArr from 'lodash-es/shuffle';
 
 import { firebaseTrackIdSelector } from '../selectors/track';
 import { PartySettings, Playlist, PlaylistReference, Track } from '../state';
+import { isSelfHostedBackend } from '../util/backend';
+import { backendFunctions } from '../util/backend-functions';
 import firebase from '../util/firebase';
 import { fetchWithAccessToken } from '../util/spotify-auth';
 
@@ -100,6 +102,15 @@ export const updateUserPlaylists = (playlists: Playlist[]) => ({
 /* Utils */
 
 export async function flushQueue(partyId: string, tracks: Track[]) {
+    if (isSelfHostedBackend) {
+        await backendFunctions.flushQueue({ partyId });
+        return;
+    }
+
+    if (!firebase) {
+        throw new Error('Firebase is unavailable in this build.');
+    }
+
     const trackRemoveObject = {};
     tracks
         .filter((t) => !t.played_at)
@@ -141,6 +152,10 @@ export async function insertPlaylist(
     shuffle: boolean = false,
     progress?: (amount: number) => any,
 ) {
+    if (isSelfHostedBackend) {
+        throw new Error('Fallback playlists are not available in self-hosted mode yet.');
+    }
+
     async function fetchTracks(
         playlist: Playlist,
         progress?: (amount: number) => any,
@@ -167,6 +182,10 @@ export async function insertPlaylist(
         return tracks;
     }
     async function removeFallbackTracks(partyId: string): Promise<void> {
+        if (!firebase) {
+            throw new Error('Firebase is unavailable in this build.');
+        }
+
         const fallbackTracks: Record<string, Track> | null = (
             await firebase
                 .database()
@@ -217,6 +236,10 @@ export async function insertPlaylist(
         };
         return acc;
     }, {});
+
+    if (!firebase) {
+        throw new Error('Firebase is unavailable in this build.');
+    }
 
     await firebase.database().ref('/tracks').child(partyId).update(updateObject);
 }

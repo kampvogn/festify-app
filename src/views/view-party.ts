@@ -20,6 +20,7 @@ import './party-queue';
 import './party-search';
 import './party-settings';
 import './party-share';
+import './playback-device-picker';
 import './playback-progress-bar';
 import './queue-drawer';
 import './search-bar';
@@ -103,7 +104,7 @@ const PartyView = (props: PartyViewProps & PartyViewDispatch) => html`
         }
 
         iron-pages {
-            padding-top: 120px;
+            padding-top: 176px;
         }
 
         app-drawer-layout:not([narrow]) [drawer-toggle] {
@@ -156,6 +157,7 @@ const PartyView = (props: PartyViewProps & PartyViewDispatch) => html`
                     <div main-title>${props.party.name}</div>
                 </app-toolbar>
                 <search-bar></search-bar>
+                <playback-device-picker></playback-device-picker>
                 <playback-progress-bar></playback-progress-bar>
             </header>
 

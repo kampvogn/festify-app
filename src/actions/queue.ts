@@ -4,6 +4,8 @@ import omit from 'lodash-es/omit';
 import { firebaseTrackIdSelector } from '../selectors/track';
 import { Track, TrackReference } from '../state';
 import { requireAuth } from '../util/auth';
+import { isSelfHostedBackend } from '../util/backend';
+import { backendFunctions } from '../util/backend-functions';
 import firebase, { firebaseNS } from '../util/firebase';
 
 export type Actions =
@@ -33,6 +35,17 @@ export const setVoteAction = (ref: TrackReference, vote: boolean) => ({
 /* Utils */
 
 export function markTrackAsPlayed(partyId: string, ref: TrackReference): Promise<void> {
+    if (isSelfHostedBackend) {
+        return backendFunctions.markTrackAsPlayed({
+            partyId,
+            ref,
+        }).then(() => undefined);
+    }
+
+    if (!firebase) {
+        throw new Error('Firebase is unavailable in this build.');
+    }
+
     return firebase
         .database()
         .ref('/tracks')
@@ -49,6 +62,17 @@ export function markTrackAsPlayed(partyId: string, ref: TrackReference): Promise
  * @param ref the ref of the track to pin
  */
 export function pinTrack(partyId: string, ref: TrackReference): Promise<void> {
+    if (isSelfHostedBackend) {
+        return backendFunctions.pinTrack({
+            partyId,
+            ref,
+        }).then(() => undefined);
+    }
+
+    if (!firebase) {
+        throw new Error('Firebase is unavailable in this build.');
+    }
+
     return firebase
         .database()
         .ref('/tracks')
@@ -60,6 +84,20 @@ export function pinTrack(partyId: string, ref: TrackReference): Promise<void> {
 
 export async function removeTrack(partyId: string, track: Track, moveToHistory: boolean) {
     const trackId = firebaseTrackIdSelector(track);
+
+    if (isSelfHostedBackend) {
+        await backendFunctions.removeTrack({
+            partyId,
+            ref: track.reference,
+            moveToHistory,
+        });
+        return;
+    }
+
+    if (!firebase) {
+        throw new Error('Firebase is unavailable in this build.');
+    }
+
     const updates: any[] = [
         firebase
             .database()
@@ -93,8 +131,26 @@ export async function removeTrack(partyId: string, track: Track, moveToHistory: 
 }
 
 export async function setVote(partyId: string, ref: TrackReference, vote: boolean) {
-    const { uid } = await requireAuth();
+    const authUser = await requireAuth();
+    if (!authUser) {
+        throw new Error('Authentication is required to vote on tracks.');
+    }
+
+    const { uid } = authUser;
     const trackId = firebaseTrackIdSelector(ref);
+
+    if (isSelfHostedBackend) {
+        await backendFunctions.setTrackVote({
+            partyId,
+            ref,
+            vote,
+        });
+        return;
+    }
+
+    if (!firebase) {
+        throw new Error('Firebase is unavailable in this build.');
+    }
 
     const a = firebase
         .database()

@@ -120,9 +120,12 @@ function* handlePlaybackStateChange(
             ? newPlayback.last_position_ms +
               (playing !== false ? Date.now() - newPlayback.last_change : 0)
             : 0;
+        const selectedDeviceId: string | null = yield select((state: State) =>
+            state.player.selectedDeviceId,
+        );
 
         yield all([
-            call(playTrack, currentTrack.reference.id, deviceId, position),
+            call(playTrack, currentTrack.reference.id, selectedDeviceId || deviceId, position),
             call(markTrackAsPlayed, partyId, currentTrack.reference),
         ]);
     }
@@ -201,9 +204,12 @@ function* handleQueueChange(
     }
 
     if (newTrack) {
+        const selectedDeviceId: string | null = yield select((state: State) =>
+            state.player.selectedDeviceId,
+        );
         yield all([
             call(markTrackAsPlayed, partyId, newTrack.reference),
-            call(playTrack, newTrack.reference.id, deviceId),
+            call(playTrack, newTrack.reference.id, selectedDeviceId || deviceId),
         ]);
     } else {
         yield player.pause();

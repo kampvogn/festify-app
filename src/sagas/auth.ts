@@ -1,6 +1,7 @@
 import { replace, LOCATION_CHANGED } from '@festify/redux-little-router';
 import { User, UserCredential } from '@firebase/auth-types';
 import { HttpsCallableResult, HttpsError } from '@firebase/functions-types';
+import { CallableResult, ExchangeCodeResult } from '../util/backend-functions';
 import { delay } from 'redux-saga';
 import {
     all,
@@ -36,15 +37,25 @@ import {
 import { updatePlaybackState } from '../actions/party-data';
 import { changeDisplayLoginModal, CHANGE_DISPLAY_LOGIN_MODAL } from '../actions/view-party';
 import { isPlaybackMasterSelector } from '../selectors/party';
-import { getProvider, requireAuth, AuthData } from '../util/auth';
-import firebase, { functions } from '../util/firebase';
+import { getProvider, requireAuth, AuthData, saveSelfHostedSession, signOutAuth } from '../util/auth';
+import { isSelfHostedBackend } from '../util/backend';
+import firebase from '../util/firebase';
+import { backendFunctions, SessionResult } from '../util/backend-functions';
 import { fetchWithAccessToken, LOCALSTORAGE_KEY, SCOPES } from '../util/spotify-auth';
 
 const AUTH_REDIRECT_LOCAL_STORAGE_KEY = 'AuthRedirect';
-const OAUTH_URL =
-    `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}` +
-    `&redirect_uri=${encodeURIComponent(window.location.origin)}&response_type=code` +
-    `&scope=${encodeURIComponent(SCOPES.join(' '))}&state=SPOTIFY_AUTH&show_dialog=true`;
+
+function spotifyCallbackUrl() {
+    return `${window.location.origin}/callback`;
+}
+
+function spotifyOAuthUrl() {
+    return (
+        `https://accounts.spotify.com/authorize?client_id=${CLIENT_ID}` +
+        `&redirect_uri=${encodeURIComponent(spotifyCallbackUrl())}&response_type=code` +
+        `&scope=${encodeURIComponent(SCOPES.join(' '))}&state=SPOTIFY_AUTH&show_dialog=true`
+    );
+}
 
 function* checkLogin() {
     const user: User = yield call(requireAuth);
@@ -83,6 +94,10 @@ function* handleFollowUpCancellation(ac: ReturnType<typeof changeDisplayLoginMod
 }
 
 function* handleFirebaseOAuth() {
+    if (!firebase) {
+        return;
+    }
+
     try {
         const cred: UserCredential = yield firebase.auth().getRedirectResult();
         if (!cred.user) {
@@ -153,9 +168,9 @@ function* handleSpotifyOAuth() {
 
     yield call(requireAuth);
 
-    let resp: HttpsCallableResult;
+    let resp: CallableResult<ExchangeCodeResult>;
     try {
-        resp = yield call(functions.exchangeCode, { callbackUrl: location.origin, code });
+        resp = yield call(backendFunctions.exchangeCode, { callbackUrl: spotifyCallbackUrl(), code });
     } catch (err) {
         yield put(exchangeCodeFail('spotify', err));
         return;
@@ -166,12 +181,17 @@ function* handleSpotifyOAuth() {
     const data = new AuthData(accessToken, Date.now() + expiresIn * 1000, refreshToken);
     yield apply(data, data.saveTo, [LOCALSTORAGE_KEY]);
 
+    let sessionData: SessionResult | null = null;
     let firebaseToken;
     try {
-        const { data }: HttpsCallableResult = yield call(functions.linkSpotifyAccounts, {
+        const { data }: HttpsCallableResult | { data: SessionResult } = yield call(backendFunctions.linkSpotifyAccounts, {
             accessToken,
         });
-        firebaseToken = data.firebaseToken;
+        if (isSelfHostedBackend) {
+            sessionData = data as SessionResult;
+        } else {
+            firebaseToken = (data as any).firebaseToken;
+        }
     } catch (err) {
         switch (err.code) {
             case 'already-exists':
@@ -189,13 +209,22 @@ function* handleSpotifyOAuth() {
         }
     }
 
-    let newUser: UserCredential;
-    try {
-        newUser = yield firebase.auth().signInWithCustomToken(firebaseToken);
-    } catch (err) {
-        const e = new Error(`Firebase login failed with ${err.code}: ${err.message}`);
-        yield put(exchangeCodeFail('spotify', e));
-        return;
+    let newUser: UserCredential | { user: any };
+    if (isSelfHostedBackend) {
+        newUser = { user: yield call(saveSelfHostedSession, sessionData!) };
+    } else {
+        if (!firebase) {
+            yield put(exchangeCodeFail('spotify', new Error('Firebase is unavailable in this build.')));
+            return;
+        }
+
+        try {
+            newUser = yield firebase.auth().signInWithCustomToken(firebaseToken);
+        } catch (err) {
+            const e = new Error(`Firebase login failed with ${err.code}: ${err.message}`);
+            yield put(exchangeCodeFail('spotify', e));
+            return;
+        }
     }
 
     try {
@@ -228,7 +257,7 @@ function* logout() {
     }
 
     yield call(AuthData.remove, LOCALSTORAGE_KEY);
-    yield firebase.auth().signOut();
+    yield call(signOutAuth);
     yield put(checkLoginStatus());
 }
 
@@ -237,6 +266,10 @@ function* logout() {
  * to prevent Firebase from disconnecting and thus destroying playback.
  */
 function* refreshFirebaseAuth() {
+    if (isSelfHostedBackend || !firebase) {
+        return;
+    }
+
     while (true) {
         yield call(delay, 1000 * 60 * 55);
 
@@ -270,8 +303,18 @@ function* triggerOAuthLogin(ac: ReturnType<typeof triggerOAuthLoginAction>) {
         );
         localStorage[AUTH_REDIRECT_LOCAL_STORAGE_KEY] =
             window.location.pathname + window.location.search + window.location.hash;
-        window.location.href = OAUTH_URL;
+        window.location.href = spotifyOAuthUrl();
     } else {
+        if (isSelfHostedBackend) {
+            yield put(exchangeCodeFail(ac.payload, new Error('Only Spotify login is supported by the self-hosted backend right now.')));
+            return;
+        }
+
+        if (!firebase) {
+            yield put(exchangeCodeFail(ac.payload, new Error('Firebase is unavailable in this build.')));
+            return;
+        }
+
         try {
             yield firebase.auth().signInWithRedirect(getProvider(ac.payload));
         } catch (err) {

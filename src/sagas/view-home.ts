@@ -2,6 +2,10 @@ import { push } from '@festify/redux-little-router';
 import { call, put, select, takeLatest } from 'redux-saga/effects';
 
 import { showToast } from '../actions';
+import { fetchWithAccessToken } from '../util/spotify-auth';
+import { currentAuthUser } from '../util/auth';
+import { isSelfHostedBackend } from '../util/backend';
+import { BackendUser } from '../util/backend-functions';
 import { NOTIFY_AUTH_STATUS_KNOWN } from '../actions/auth';
 import {
     createNewParty,
@@ -17,22 +21,56 @@ import { PartySettings, State } from '../state';
 
 function* createParty() {
     const { player, user }: State = yield select();
-    const spotifyUser = user.credentials.spotify.user;
+    const spotifyProfile = user.credentials.spotify.user;
 
-    if (!spotifyUser) {
-        const e = new Error('Missing Spotify user');
+    let userDisplayName = '';
+    let userCountry = spotifyProfile ? spotifyProfile.country : 'US';
+    let hasPremium = false;
+
+    if (isSelfHostedBackend) {
+        const backendUser = currentAuthUser() as BackendUser | null;
+        if (!backendUser || backendUser.isAnonymous) {
+            const e = new Error('Missing Spotify user');
+            yield put(createPartyFail(e));
+            yield put(showToast('Please log in with Spotify again before hosting a party.', 10000));
+            return;
+        }
+
+        userDisplayName = backendUser.displayName || backendUser.email || backendUser.uid;
+        hasPremium = Boolean(backendUser.spotifyIsPremium);
+    } else {
+        let spotifyUser = spotifyProfile;
+        if (!spotifyUser) {
+            try {
+                const resp = yield call(fetchWithAccessToken, '/me');
+                spotifyUser = yield resp.json();
+            } catch (err) {
+                const e = new Error('Missing Spotify user');
+                yield put(createPartyFail(e));
+                yield put(showToast('Please log in with Spotify again before hosting a party.', 10000));
+                return;
+            }
+        }
+
+        userDisplayName = spotifyUser ? (spotifyUser.display_name || spotifyUser.id) : '';
+        userCountry = spotifyUser ? spotifyUser.country : userCountry;
+        hasPremium = Boolean(spotifyUser && spotifyUser.product === 'premium');
+    }
+
+    if (!hasPremium) {
+        const e = new Error('To create parties and play music on Festify, you need a Spotify Premium account.');
         yield put(createPartyFail(e));
+        yield put(showToast(e.message, 10000));
         return;
     }
 
-    const userDisplayName = spotifyUser.display_name || spotifyUser.id;
     let partyId: string;
     try {
         partyId = yield call(
             createNewParty,
             userDisplayName,
             player.instanceId,
-            spotifyUser.country,
+            userCountry,
             PartySettings.defaultSettings(),
         );
     } catch (err) {
@@ -64,23 +102,41 @@ function* joinParty(ac: ReturnType<typeof joinPartyStart>) {
 }
 
 function* warnNonPremium() {
-    const { router, user }: State = yield select();
+    const { router }: State = yield select();
 
-    if (
-        (router.result || { view: Views.Home }).view !== Views.Home ||
-        !user.credentials.spotify.user ||
-        user.credentials.spotify.user.product === 'premium'
-    ) {
+    if ((router.result || { view: Views.Home }).view !== Views.Home) {
         return;
     }
 
-    yield put(
-        showToast(
-            // tslint:disable-next-line:max-line-length
-            "To create parties and play music on Festify, you need to have a 'Spotify Premium' account. Please login again using a premium account if you want to host parties.",
-            10000,
-        ),
-    );
+    if (isSelfHostedBackend) {
+        const backendUser = currentAuthUser() as BackendUser | null;
+        if (backendUser && !backendUser.isAnonymous && !backendUser.spotifyIsPremium) {
+            yield put(
+                showToast(
+                    // tslint:disable-next-line:max-line-length
+                    "To create parties and play music on Festify, you need to have a 'Spotify Premium' account. Please login again using a premium account if you want to host parties.",
+                    10000,
+                ),
+            );
+        }
+        return;
+    }
+
+    try {
+        const resp = yield call(fetchWithAccessToken, '/me');
+        const spotifyUser = yield resp.json();
+        if (!spotifyUser || spotifyUser.product !== 'premium') {
+            yield put(
+                showToast(
+                    // tslint:disable-next-line:max-line-length
+                    "To create parties and play music on Festify, you need to have a 'Spotify Premium' account. Please login again using a premium account if you want to host parties.",
+                    10000,
+                ),
+            );
+        }
+    } catch (err) {
+        return;
+    }
 }
 
 export default function*() {

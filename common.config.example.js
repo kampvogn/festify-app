@@ -1,0 +1,3 @@
+export const FANART_TV_API_KEY = "FANART_API_KEY_HERE";
+export const SENTRY_URL = "SENTRY_URL_HERE";
+

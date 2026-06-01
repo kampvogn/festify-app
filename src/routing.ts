@@ -18,6 +18,10 @@ const routes = {
         title: 'Home',
         view: Views.Home,
     },
+    '/callback': {
+        title: 'Callback',
+        view: Views.Home,
+    },
     '/party/:partyId': {
         title: 'Party',
         view: Views.Party,

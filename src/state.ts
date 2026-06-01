@@ -151,12 +151,18 @@ export interface PartyViewState {
 }
 
 export interface PlayerState {
+    availableDevices: SpotifyApi.UserDevice[];
+    deviceLoadError: Error | null;
+    deviceLoadInProgress: boolean;
     localDeviceId: string | null;
     instanceId: string;
     initializing: boolean;
     initializationError: Error | null;
     isCompatible: boolean;
     sdkReady: boolean;
+    selectedDeviceId: string | null;
+    transferPlaybackError: Error | null;
+    transferPlaybackInProgress: boolean;
     togglingPlayback: boolean;
     togglePlaybackError: Error | null;
 }

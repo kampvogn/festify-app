@@ -1,10 +1,10 @@
 import { createSelector } from 'reselect';
 
 import { State } from '../state';
-import firebase from '../util/firebase';
+import { currentAuthUser } from '../util/auth';
 
 export const isPartyOwnerSelector = (state: State) => {
-    const fbUser = firebase.auth().currentUser;
+    const fbUser = currentAuthUser();
     return Boolean(
         fbUser && state.party.currentParty && state.party.currentParty.created_by === fbUser.uid,
     );
@@ -17,7 +17,7 @@ export const partyIdSelector = (state: State): string | null => {
 
 export const playbackMasterSelector = (state: State): string | null => {
     const party = state.party.currentParty;
-    return party ? party.playback.master_id : null;
+    return party && party.playback ? party.playback.master_id : null;
 };
 
 export const isPlaybackMasterSelector = createSelector(
@@ -33,4 +33,4 @@ export const hasOtherPlaybackMasterSelector = createSelector(
 );
 
 export const playbackSelector = (state: State) =>
-    state.party.currentParty ? state.party.currentParty.playback : null;
+    state.party.currentParty && state.party.currentParty.playback ? state.party.currentParty.playback : null;

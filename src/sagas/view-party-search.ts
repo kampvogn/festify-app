@@ -36,17 +36,22 @@ function* doSearch(action) {
     const {
         party: { currentParty },
     }: State = yield select();
+    const SEARCH_LIMIT = 10;
     let url =
-        `/search?type=track&limit=${20}&market=${currentParty!.country}` +
-        `&q=${encodeURIComponent(s.replace('-', ' ') + '*')}`;
+        `/search?type=track&limit=${SEARCH_LIMIT}` +
+        `&q=${encodeURIComponent(s.replace('-', ' ').trim())}`;
 
     const tracks: SpotifyApi.TrackObjectFull[] = [];
     try {
         // Search until we have at least 20 available and playable search results
         while (tracks.length < 20 && url) {
             const trackResponse = yield call(fetchWithAnonymousAuth, url);
+            if (!trackResponse.ok) {
+                const errorBody = yield trackResponse.text();
+                throw new Error(`Spotify search failed with ${trackResponse.status}: ${errorBody}`);
+            }
+
             const resp: SpotifyApi.TrackSearchResponse = yield trackResponse.json();
-            console.log(resp.tracks.items);
             const votableTracks = resp.tracks.items
                 //.filter((t) => t.is_playable !== false)
                 .filter((t) => {

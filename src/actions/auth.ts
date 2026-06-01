@@ -2,7 +2,9 @@ import { AuthCredential, OAuthCredential, User } from '@firebase/auth-types';
 
 import { EnabledProvidersList, UserCredentials } from '../state';
 import { requireAuth } from '../util/auth';
-import firebase, { firebaseNS, functions } from '../util/firebase';
+import { isSelfHostedBackend } from '../util/backend';
+import firebase, { firebaseNS } from '../util/firebase';
+import { backendFunctions } from '../util/backend-functions';
 import { requireAccessToken } from '../util/spotify-auth';
 
 import { showToast } from '.';
@@ -72,9 +74,13 @@ export const welcomeUser = (user: User) =>
 const FOLLOWUP_LS_KEY = 'FollowUpCredential';
 
 export async function getFollowUpLoginProviders(email: string): Promise<EnabledProvidersList> {
+    if (!firebase) {
+        return EnabledProvidersList.enable([]);
+    }
+
     const [providers, isSpotify] = await Promise.all([
         firebase.auth().fetchProvidersForEmail(email),
-        functions.isSpotifyUser({ email }),
+        backendFunctions.isSpotifyUser({ email }),
     ]);
     const strippedProviders = providers.map(provId => provId.replace('.com', ''));
     const enabledProviders = EnabledProvidersList.enable(
@@ -103,7 +109,7 @@ export async function linkFollowUpUser() {
 
     if (spotify) {
         const accessToken = await requireAccessToken();
-        await functions.linkSpotifyAccounts({ accessToken });
+        await backendFunctions.linkSpotifyAccounts({ accessToken });
     } else {
         let credential: AuthCredential;
         switch (providerId) {
@@ -123,8 +129,12 @@ export async function linkFollowUpUser() {
                 throw new Error('Unknown provider');
         }
 
+        if (isSelfHostedBackend) {
+            throw new Error('Only Spotify account linking is supported by the self-hosted backend right now.');
+        }
+
         const user = await requireAuth();
-        await user.linkAndRetrieveDataWithCredential(credential);
+        await (user as User).linkAndRetrieveDataWithCredential(credential);
     }
 }
 

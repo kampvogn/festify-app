@@ -19,6 +19,8 @@ import { isPartyOwnerSelector, playbackSelector } from '../selectors/party';
 import { currentTrackSelector, tracksEqual } from '../selectors/track';
 import { Playback, State, Track } from '../state';
 import firebase, { firebaseNS } from '../util/firebase';
+import { isSelfHostedBackend } from '../util/backend';
+import { backendFunctions } from '../util/backend-functions';
 import { takeEveryWithState } from '../util/saga';
 
 import manageLocalPlayer from './local-player';
@@ -26,7 +28,7 @@ import manageLocalPlayer from './local-player';
 function* handleTakeOver() {
     const { party, player }: State = yield select();
 
-    if (player.instanceId === party.currentParty!.playback.master_id) {
+    if (party.currentParty!.playback && player.instanceId === party.currentParty!.playback.master_id) {
         return;
     }
 
@@ -39,20 +41,46 @@ function* handleTakeOver() {
 
 function* handlePlayPause() {
     const { party, player }: State = yield select();
+    const playback = party.currentParty!.playback || {
+        last_change: Date.now(),
+        last_position_ms: 0,
+        master_id: null,
+        playing: false,
+        target_playing: null,
+    };
 
     yield put(
         updatePlaybackState({
-            playing: !party.currentParty!.playback.playing,
-            master_id: party.currentParty!.playback.master_id || player.instanceId,
+            playing: !playback.playing,
+            master_id: playback.master_id || player.instanceId,
         }),
     );
 
-    if (party.currentParty!.playback.master_id !== player.instanceId) {
+    if (playback.master_id !== player.instanceId) {
         yield put(togglePlaybackFinish());
     }
 }
 
+function* persistSelfHostedPlaybackState(partyId: string) {
+    while (true) {
+        const { payload }: ReturnType<typeof updatePlaybackState> = yield take(UPDATE_PLAYBACK_STATE);
+
+        if (!(yield select(isPartyOwnerSelector))) {
+            continue;
+        }
+
+        yield call(backendFunctions.updatePlaybackState, {
+            partyId,
+            playback: payload,
+        });
+    }
+}
+
 function* handleFirebase(partyId: string) {
+    if (!firebase) {
+        return;
+    }
+
     let isPlaybackMaster = false;
     try {
         const playbackRef = firebase
@@ -120,6 +148,10 @@ function* handleFirebase(partyId: string) {
     } finally {
         // Remove playback state from DB when party is left while we're playing
         if (yield cancelled() && isPlaybackMaster) {
+            if (!firebase) {
+                return;
+            }
+
             firebase
                 .database()
                 .ref('/parties')
@@ -170,7 +202,14 @@ function* handlePartyUpdate(
 export function* managePlaybackState(partyId: string) {
     yield takeEvery(INSTALL_PLAYBACK_MASTER, handleTakeOver);
     yield takeEvery(TOGGLE_PLAYBACK_START, handlePlayPause);
-    yield fork(handleFirebase, partyId);
+
+    if (isSelfHostedBackend) {
+        yield fork(persistSelfHostedPlaybackState, partyId);
+        yield takeEveryWithState([UPDATE_PARTY, UPDATE_PLAYBACK_STATE], playbackSelector, handlePartyUpdate);
+    } else {
+        yield fork(handleFirebase, partyId);
+    }
+
     yield fork(manageLocalPlayer, partyId);
 
     yield takeEveryWithState(UPDATE_TRACKS, currentTrackSelector, function*(

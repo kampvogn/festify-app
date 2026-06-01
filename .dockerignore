@@ -1,0 +1,14 @@
+.git
+.github
+node_modules
+functions/node_modules
+build
+.rpt2_cache
+.tmp
+npm-debug.log
+yarn-error.log
+
+# Backend secrets are only needed for Firebase Functions deploys.
+functions/service-account.json
+functions/spotify.config.ts
+

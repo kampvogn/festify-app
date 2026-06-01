@@ -2,7 +2,7 @@ import { User } from '@firebase/auth-types';
 import { call, fork, put, select, take, takeEvery } from 'redux-saga/effects';
 
 import { showToast } from '../actions';
-import { UPDATE_TRACKS } from '../actions/party-data';
+import { updateConnectionState, updateParty, updateTracks, updateUserVotes, UPDATE_TRACKS } from '../actions/party-data';
 import {
     pinTrack,
     removeTrack as doRemoveTrack,
@@ -20,8 +20,18 @@ import {
     singleTrackSelector,
     tracksEqual,
 } from '../selectors/track';
-import { State, Track } from '../state';
+import { ConnectionState, State, Track } from '../state';
 import { requireAuth } from '../util/auth';
+import { isSelfHostedBackend } from '../util/backend';
+import { backendFunctions } from '../util/backend-functions';
+
+function* refreshSelfHostedParty(partyId: string) {
+    const { data: snapshot } = yield call(backendFunctions.getParty, partyId);
+    yield put(updateParty(snapshot.party));
+    yield put(updateTracks(snapshot.tracks));
+    yield put(updateUserVotes(snapshot.userVotes));
+    yield put(updateConnectionState(ConnectionState.Connected));
+}
 
 function* pinTopTrack(partyId: string) {
     let topTrack: Track = undefined!;
@@ -42,7 +52,10 @@ function* pinTopTrack(partyId: string) {
         }
 
         topTrack = newTopTrack;
-        yield fork(pinTrack, partyId, newTopTrack.reference);
+        yield call(pinTrack, partyId, newTopTrack.reference);
+        if (isSelfHostedBackend) {
+            yield call(refreshSelfHostedParty, partyId);
+        }
     }
 }
 
@@ -53,6 +66,9 @@ function* removeTrack(partyId: string, ac: ReturnType<typeof removeTrackAction>)
         const track = singleTrackSelector(state, firebaseTrackIdSelector(ref));
 
         yield call(doRemoveTrack, partyId, track, moveToHistory);
+        if (isSelfHostedBackend) {
+            yield call(refreshSelfHostedParty, partyId);
+        }
     } catch (err) {
         yield put(showToast(`Failed to remove track: ${err}`));
     }
@@ -72,6 +88,9 @@ function* setVote(partyId: string, ac: ReturnType<typeof setVoteAction>) {
     yield put(setVoteAction(ref, vote));
     try {
         yield call(doSetVote, partyId, ref, vote);
+        if (isSelfHostedBackend) {
+            yield call(refreshSelfHostedParty, partyId);
+        }
     } catch (err) {
         yield put(showToast(`Failed to toggle vote: ${err}`));
     }

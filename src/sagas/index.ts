@@ -1,6 +1,7 @@
 import authSaga from './auth';
 import linkJoinCreateSaga from './link-join-create';
 import metadataSaga from './metadata';
+import playbackDevicesSaga from './playback-devices';
 import partyDataSaga from './party-data';
 import toastSaga from './toast';
 import viewHomeSaga from './view-home';
@@ -13,6 +14,7 @@ export default [
     authSaga,
     linkJoinCreateSaga,
     metadataSaga,
+    playbackDevicesSaga,
     partyDataSaga,
     searchSaga,
     toastSaga,

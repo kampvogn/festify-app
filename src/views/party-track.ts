@@ -22,6 +22,7 @@ import {
     tracksEqual,
     voteStringGeneratorFactory,
 } from '../selectors/track';
+import { playbackSelector } from '../selectors/party';
 import { hasConnectedSpotifyAccountSelector } from '../selectors/users';
 import { Metadata, State, Track, TrackReference } from '../state';
 import sharedStyles from '../util/shared-styles';
@@ -35,6 +36,8 @@ interface PartyTrackProps {
     isMusicPlaying: boolean;
     isPlayingTrack: boolean;
     metadata: Metadata | null;
+    progressPercent: number | null;
+    progressText: string | null;
     showRemoveButton: boolean;
     showTakeoverButton: boolean;
     togglingPlayback: boolean;
@@ -70,6 +73,14 @@ const LikeButtonIcon = (props: PartyTrackRenderProps): string => {
         return 'festify:add';
     }
 };
+
+function formatTrackTime(ms: number): string {
+    const safeMs = Math.max(0, Math.floor(ms || 0));
+    const totalSeconds = Math.floor(safeMs / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+}
 
 const PlayButton = (props: PartyTrackRenderProps) => {
     if (props.isPlayingTrack) {
@@ -172,6 +183,35 @@ export const PartyTrack = (props: PartyTrackRenderProps) => html`
             text-overflow: ellipsis;
         }
 
+        .progress-row {
+            align-items: center;
+            display: flex;
+            gap: 10px;
+            margin-top: 6px;
+        }
+
+        .progress-track {
+            background: rgba(255, 255, 255, 0.12);
+            border-radius: 999px;
+            flex: 1 1 auto;
+            height: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            background: var(--primary-color);
+            height: 100%;
+            transform-origin: left;
+        }
+
+        .progress-text {
+            color: rgba(255, 255, 255, 0.7);
+            flex-shrink: 0;
+            font-size: 12px;
+            line-height: 1;
+            white-space: nowrap;
+        }
+
         .dot {
             margin: 0 4px;
         }
@@ -230,6 +270,16 @@ export const PartyTrack = (props: PartyTrackRenderProps) => html`
                       <span class="dot">&middot;</span>
                       <span>${props.voteString}</span>
                   </aside>
+              `
+            : null}
+        ${props.isPlayingTrack && props.progressPercent != null && props.progressText
+            ? html`
+                  <div class="progress-row">
+                      <div class="progress-track">
+                          <div class="progress-fill" style="width: ${props.progressPercent}%"></div>
+                      </div>
+                      <div class="progress-text">${props.progressText}</div>
+                  </div>
               `
             : null}
     </div>
@@ -318,25 +368,54 @@ export const createMapStateToPropsFactory = (
             isCompatibleSelector,
             hasConnectedSpotifyAccountSelector,
             (isOwner, isMaster, master, isPlaying, isCompatible, hasSptConnected) =>
-                isPlaying && isOwner && !isMaster && !!master && isCompatible && hasSptConnected,
+                Boolean(isPlaying && isOwner && !isMaster && master && isCompatible && hasSptConnected),
         );
         const voteStringGenerator = voteStringGeneratorFactory(trackSelector);
 
-        return (state: State, ownProps: PartyTrackOwnProps): PartyTrackProps => ({
-            artistName: artistJoiner(state, ownProps.trackid),
-            enablePlayButton: enablePlayButtonSelector(state),
-            hasConnectedSpotifyAccount: hasConnectedSpotifyAccountSelector(state),
-            hasVoted: !!state.party.userVotes && state.party.userVotes[ownProps.trackid] === true,
-            isOwner: isPartyOwnerSelector(state),
-            isMusicPlaying: !!state.party.currentParty && state.party.currentParty.playback.playing,
-            isPlayingTrack: isPlayingSelector(state, ownProps.trackid),
-            metadata: singleMetadataSelector(state, ownProps.trackid),
-            showRemoveButton: showRemoveTrackButtonSelector(state, ownProps.trackid),
-            showTakeoverButton: showTakeoverButtonSelector(state, ownProps.trackid),
-            togglingPlayback: state.player.togglingPlayback,
-            track: trackSelector(state, ownProps.trackid),
-            voteString: voteStringGenerator(state, ownProps.trackid),
-        });
+        return (state: State, ownProps: PartyTrackOwnProps): PartyTrackProps => {
+            const metadata = singleMetadataSelector(state, ownProps.trackid);
+            const playback = playbackSelector(state);
+            const isPlayingTrack = isPlayingSelector(state, ownProps.trackid);
+            let progressPercent: number | null = null;
+            let progressText: string | null = null;
+
+            if (isPlayingTrack && metadata && playback) {
+                const durationMs = metadata.durationMs || 0;
+                const currentMs = Math.max(
+                    0,
+                    Math.min(
+                        durationMs,
+                        playback.last_position_ms +
+                            (playback.playing ? Date.now() - playback.last_change : 0),
+                    ),
+                );
+                if (durationMs > 0) {
+                    progressPercent = Math.max(0, Math.min(100, (currentMs / durationMs) * 100));
+                    progressText = `${formatTrackTime(currentMs)} / ${formatTrackTime(durationMs)}`;
+                }
+            }
+
+            return {
+                artistName: artistJoiner(state, ownProps.trackid),
+                enablePlayButton: enablePlayButtonSelector(state),
+                hasConnectedSpotifyAccount: hasConnectedSpotifyAccountSelector(state),
+                hasVoted: !!state.party.userVotes && state.party.userVotes[ownProps.trackid] === true,
+                isOwner: isPartyOwnerSelector(state),
+                isMusicPlaying:
+                    !!state.party.currentParty &&
+                    !!state.party.currentParty.playback &&
+                    state.party.currentParty.playback.playing,
+                isPlayingTrack,
+                metadata,
+                progressPercent,
+                progressText,
+                showRemoveButton: showRemoveTrackButtonSelector(state, ownProps.trackid),
+                showTakeoverButton: showTakeoverButtonSelector(state, ownProps.trackid),
+                togglingPlayback: state.player.togglingPlayback,
+                track: trackSelector(state, ownProps.trackid),
+                voteString: voteStringGenerator(state, ownProps.trackid),
+            };
+        };
     };
 };
 
