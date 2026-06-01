@@ -258,6 +258,11 @@ export async function removeTrack(partyId: string, user: SessionUser, ref: Track
                  WHERE party_id = $1 AND track_key = $2`,
                 [partyId, trackKey],
             );
+            await client.query(
+                `DELETE FROM votes
+                 WHERE party_id = $1 AND track_key = $2`,
+                [partyId, trackKey],
+            );
         } else {
             await client.query(
                 `DELETE FROM tracks
