@@ -185,6 +185,15 @@ export async function setTrackVote(partyId: string, user: SessionUser, ref: Trac
                 [partyId, trackKey, ref.provider, ref.id, queueOrder, 0, false],
             );
             trackRow = await getTrackRow(client, partyId, trackKey);
+        } else if (trackRow.played_at && vote) {
+            const queueOrder = await getNextQueueOrder(client, partyId);
+            await client.query(
+                `UPDATE tracks
+                 SET played_at = NULL, queue_order = $3, vote_count = 0
+                 WHERE party_id = $1 AND track_key = $2`,
+                [partyId, trackKey, queueOrder],
+            );
+            trackRow = { ...trackRow, played_at: null, queue_order: queueOrder, vote_count: 0 };
         }
 
         const currentCount = Number(trackRow.vote_count || 0);
@@ -387,7 +396,11 @@ export async function updatePlaybackState(partyId: string, user: SessionUser, pl
             ...currentPlayback,
             ...playback,
         };
-        if (mergedPlayback.last_change == null) {
+        const isChangingState =
+            mergedPlayback.last_change == null ||
+            (playback.playing !== undefined && playback.playing !== currentPlayback.playing) ||
+            (playback.last_position_ms !== undefined && playback.last_position_ms !== currentPlayback.last_position_ms);
+        if (isChangingState) {
             mergedPlayback.last_change = Date.now();
         }
 
