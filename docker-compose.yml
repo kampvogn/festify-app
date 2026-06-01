@@ -15,6 +15,8 @@ services:
       context: ./selfhost
     container_name: festify-api
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:8089:8089"
     environment:
       PORT: "8089"
       DATABASE_URL: postgres://festify:festify@festify-db:5432/festify

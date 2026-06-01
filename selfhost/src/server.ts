@@ -100,7 +100,16 @@ app.post('/api/auth/anonymous', async (request, reply) => {
 
 app.get('/api/auth/me', async (request, reply) => {
     try {
-        return await requireSessionUser(request);
+        const user = await requireSessionUser(request);
+        return {
+            uid: user.id,
+            email: user.email,
+            displayName: user.displayName,
+            photoURL: user.photoUrl,
+            isAnonymous: user.spotifyId === null,
+            providerId: user.spotifyId !== null ? 'spotify' : 'anonymous',
+            spotifyIsPremium: user.spotifyIsPremium,
+        };
     } catch {
         reply.code(401);
         return { error: 'Unauthorized' };

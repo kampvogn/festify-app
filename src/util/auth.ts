@@ -144,7 +144,7 @@ export async function requireAuth(): Promise<User | BackendUser | null> {
         // 2. Cookie may exist from a prior session — ask the server who we are
         try {
             const { data: meUser } = await backendFunctions.getMe();
-            if (meUser && (meUser as any).id) {
+            if (meUser && meUser.uid) {
                 SelfHostedAuthData.save(meUser);
                 return meUser;
             }
