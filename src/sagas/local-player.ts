@@ -68,7 +68,7 @@ function* playTrack(id: string, deviceId: string, positionMs: number = 0) {
     yield put(play(id, positionMs || 0));
 
     const playUri = `/me/player/play?device_id=${deviceId}`;
-    yield fetchWithAccessToken(playUri, {
+    const resp: Response = yield fetchWithAccessToken(playUri, {
         method: 'put',
         headers: {
             'Content-Type': 'application/json',
@@ -78,6 +78,9 @@ function* playTrack(id: string, deviceId: string, positionMs: number = 0) {
             position_ms: Math.floor(positionMs),
         }),
     });
+    if (!resp.ok) {
+        console.error('Spotify play failed:', resp.status, yield resp.text());
+    }
 }
 
 function* handlePlaybackStateChange(
@@ -115,7 +118,7 @@ function* handlePlaybackStateChange(
     if (spotifyState && spotifyState.track_window.current_track.id === currentTrack.reference.id) {
         yield player.resume();
     } else {
-        const playing = 'playing' in oldPlayback ? oldPlayback.playing : undefined;
+        const playing = 'playing' in oldPlayback ? oldPlayback.playing : false;
         const position = newPlayback.last_position_ms
             ? newPlayback.last_position_ms +
               (playing !== false ? Date.now() - newPlayback.last_change : 0)
@@ -179,7 +182,12 @@ function* handleSpotifyPlaybackChange(spotifyPlayback: Spotify.PlaybackState) {
     };
 
     if (localPlayback.playing !== !spotifyPlayback.paused) {
-        newStatus.playing = !spotifyPlayback.paused;
+        // Skip intermediate SDK loading states (paused at position 0) to avoid false pauses.
+        // Track end at position 0 is handled by handlePlaybackLifecycle instead.
+        const isLoadingState = spotifyPlayback.position === 0 && spotifyPlayback.paused;
+        if (!isLoadingState) {
+            newStatus.playing = !spotifyPlayback.paused;
+        }
     }
 
     yield put(updatePlaybackState(newStatus));

@@ -74,7 +74,7 @@ app.setErrorHandler((error, request, reply) => {
 app.addHook('onRequest', async (request, reply) => {
     reply.header('Access-Control-Allow-Origin', config.publicOrigin);
     reply.header('Access-Control-Allow-Headers', 'content-type, authorization');
-    reply.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+    reply.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
     reply.header('Access-Control-Allow-Credentials', 'true');
 
     if (request.method === 'OPTIONS') {
@@ -133,6 +133,21 @@ app.get('/api/parties/mine', async (request) => {
         name: row.name,
         created_at: new Date(row.created_at).getTime(),
     }));
+});
+
+app.patch('/api/parties/:partyId', async (request, reply) => {
+    const params = z.object({ partyId: z.string().uuid() }).parse(request.params);
+    const body = z.object({ name: z.string().min(1).max(100) }).parse(request.body);
+    const user = await requireSessionUser(request);
+    const result = await pool.query(
+        `UPDATE parties SET name = $1, updated_at = now() WHERE id = $2 AND created_by = $3 RETURNING id, name`,
+        [body.name, params.partyId, user.id],
+    );
+    if (result.rowCount === 0) {
+        reply.code(403);
+        return { error: 'Only the party owner may perform this action.' };
+    }
+    return result.rows[0];
 });
 
 app.delete('/api/parties/:partyId', async (request, reply) => {

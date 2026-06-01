@@ -6,6 +6,7 @@ import {
     transferPlaybackDeviceFail,
     transferPlaybackDeviceFinish,
     LOAD_PLAYBACK_DEVICES_START,
+    PLAYER_INIT_FINISH,
     TRANSFER_PLAYBACK_DEVICE_START,
 } from '../actions/playback-spotify';
 import { hasConnectedSpotifyAccountSelector } from '../selectors/users';
@@ -69,7 +70,7 @@ function* maybeLoadDevices() {
 }
 
 export default function*() {
-    yield takeEvery(OPEN_PARTY_FINISH, maybeLoadDevices);
+    yield takeEvery([OPEN_PARTY_FINISH, PLAYER_INIT_FINISH], maybeLoadDevices);
     yield takeEvery(LOAD_PLAYBACK_DEVICES_START, refreshPlaybackDevices);
     yield takeEvery(TRANSFER_PLAYBACK_DEVICE_START, transferPlaybackDevice);
 }
