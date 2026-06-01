@@ -101,7 +101,10 @@ function* handlePlaybackStateChange(
 
     if (!newPlayback.playing) {
         if ('playing' in oldPlayback && oldPlayback.playing) {
-            yield player.pause();
+            const stateBeforePause: Spotify.PlaybackState | null = yield player.getCurrentState();
+            if (stateBeforePause) {
+                yield player.pause();
+            }
         }
 
         yield put(togglePlaybackFinish());
@@ -116,7 +119,9 @@ function* handlePlaybackStateChange(
     }
 
     if (spotifyState && spotifyState.track_window.current_track.id === currentTrack.reference.id) {
-        yield player.resume();
+        if (spotifyState.paused) {
+            yield player.resume();
+        }
     } else {
         const playing = 'playing' in oldPlayback ? oldPlayback.playing : false;
         const position = newPlayback.last_position_ms
@@ -220,7 +225,10 @@ function* handleQueueChange(
             call(playTrack, newTrack.reference.id, selectedDeviceId || deviceId),
         ]);
     } else {
-        yield player.pause();
+        const stateBeforeQueuePause: Spotify.PlaybackState | null = yield player.getCurrentState();
+        if (stateBeforeQueuePause) {
+            yield player.pause();
+        }
     }
 }
 
