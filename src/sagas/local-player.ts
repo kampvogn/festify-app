@@ -212,7 +212,14 @@ function* handleQueueChange(
 
     const playbackState: Playback | null = yield select(playbackSelector);
 
-    if ((!oldTrack && !newTrack) || !playbackState!.playing) {
+    if (!oldTrack && !newTrack) {
+        return;
+    }
+
+    if (!playbackState!.playing) {
+        if (!oldTrack && newTrack) {
+            yield put(updatePlaybackState({ playing: true }));
+        }
         return;
     }
 
