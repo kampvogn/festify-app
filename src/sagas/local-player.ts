@@ -207,7 +207,7 @@ function* handleQueueChange(
 function* handlePlaybackError(error: Error) {
     yield put(showToast(error.message));
     console.error('Playback error:', error);
-    Raven.captureException(error.message);
+    Raven.captureException(error);
 }
 
 // Polling fallback for external Spotify Connect devices (Spotify-specific).

@@ -1,11 +1,12 @@
-import * as raven from 'raven-js';
+/// <reference path="../types/sentry-browser.d.ts" />
+import * as Sentry from '@sentry/browser';
 
 import { SENTRY_URL } from '../../common.config';
 
-const Raven = new (raven as any).Client();
-
 if (SENTRY_URL && /^https?:\/\//.test(SENTRY_URL)) {
-    Raven.config(SENTRY_URL).install();
+    Sentry.init({ dsn: SENTRY_URL });
 }
 
-export default Raven;
+export default {
+    captureException: (err: Error | string) => Sentry.captureException(err),
+};
