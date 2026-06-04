@@ -8,7 +8,7 @@ export type Actions = ReturnType<typeof updateMetadata>;
 export const UPDATE_METADATA = 'UPDATE_METADATA';
 
 export function updateMetadata(
-    meta: Record<string, Metadata> | SpotifyApi.TrackObjectFull[] | Record<string, string[]>,
+    meta: Record<string, Metadata> | Record<string, string[]>,
 ) {
     function isFanartObj(
         meta: Record<string, Metadata> | Record<string, string[]>,
@@ -16,24 +16,7 @@ export function updateMetadata(
         return Object.keys(meta).some(k => Array.isArray(meta[k]));
     }
 
-    if (Array.isArray(meta)) {
-        const payload: Record<string, Metadata> = {};
-        for (const track of meta) {
-            payload[`spotify-${track.id}`] = {
-                artists: track.artists.map(art => art.name),
-                cover: track.album.images.filter(img => img.width && img.height),
-                durationMs: track.duration_ms,
-                isrc: track.external_ids ? track.external_ids.isrc : undefined,
-                isPlayable: track.is_playable !== false,
-                name: track.name,
-            } as Metadata;
-        }
-
-        return {
-            type: UPDATE_METADATA as typeof UPDATE_METADATA,
-            payload,
-        };
-    } else if (isFanartObj(meta)) {
+    if (isFanartObj(meta)) {
         const payload: Record<string, Partial<Metadata>> = {};
         Object.keys(meta).forEach(key => (payload[key] = { background: meta[key] }));
 

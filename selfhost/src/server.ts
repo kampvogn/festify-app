@@ -264,7 +264,7 @@ app.post('/api/spotify/link-account', async (request, reply) => {
 app.post('/api/parties/:partyId/tracks/vote', async (request) => {
     const params = z.object({ partyId: z.string().uuid() }).parse(request.params);
     const body = z.object({
-        ref: z.object({ provider: z.literal('spotify'), id: z.string().min(1) }),
+        ref: z.object({ provider: z.string().min(1), id: z.string().min(1) }),
         vote: z.boolean(),
     }).parse(request.body);
     const user = await requireSessionUser(request);
@@ -276,7 +276,7 @@ app.post('/api/parties/:partyId/tracks/vote', async (request) => {
 app.post('/api/parties/:partyId/tracks/remove', async (request) => {
     const params = z.object({ partyId: z.string().uuid() }).parse(request.params);
     const body = z.object({
-        ref: z.object({ provider: z.literal('spotify'), id: z.string().min(1) }),
+        ref: z.object({ provider: z.string().min(1), id: z.string().min(1) }),
         moveToHistory: z.boolean(),
     }).parse(request.body);
     const user = await requireSessionUser(request);
@@ -288,7 +288,7 @@ app.post('/api/parties/:partyId/tracks/remove', async (request) => {
 app.post('/api/parties/:partyId/tracks/pin', async (request) => {
     const params = z.object({ partyId: z.string().uuid() }).parse(request.params);
     const body = z.object({
-        ref: z.object({ provider: z.literal('spotify'), id: z.string().min(1) }),
+        ref: z.object({ provider: z.string().min(1), id: z.string().min(1) }),
     }).parse(request.body);
     const user = await requireSessionUser(request);
     await pinTrack(params.partyId, user, body.ref);
@@ -299,7 +299,7 @@ app.post('/api/parties/:partyId/tracks/pin', async (request) => {
 app.post('/api/parties/:partyId/tracks/played', async (request) => {
     const params = z.object({ partyId: z.string().uuid() }).parse(request.params);
     const body = z.object({
-        ref: z.object({ provider: z.literal('spotify'), id: z.string().min(1) }),
+        ref: z.object({ provider: z.string().min(1), id: z.string().min(1) }),
     }).parse(request.body);
     const user = await requireSessionUser(request);
     await markTrackPlayed(params.partyId, user, body.ref);

@@ -79,7 +79,7 @@ export const loadPlaybackDevicesStart = () => ({
     type: LOAD_PLAYBACK_DEVICES_START as typeof LOAD_PLAYBACK_DEVICES_START,
 });
 
-export const loadPlaybackDevicesFinish = (devices: SpotifyApi.UserDevice[]) => ({
+export const loadPlaybackDevicesFinish = (devices: import('../state').PlayerDevice[]) => ({
     type: LOAD_PLAYBACK_DEVICES_FINISH as typeof LOAD_PLAYBACK_DEVICES_FINISH,
     payload: devices,
 });

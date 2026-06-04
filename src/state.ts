@@ -112,7 +112,7 @@ export interface Track {
 
 export interface TrackReference {
     id: string;
-    provider: 'spotify';
+    provider: string;
 }
 
 /*
@@ -161,8 +161,16 @@ export interface PartyViewState {
     userMenuOpen: boolean;
 }
 
+export interface PlayerDevice {
+    id: string | null;
+    name: string;
+    type: string | null;
+    is_active: boolean;
+    volume_percent: number | null;
+}
+
 export interface PlayerState {
-    availableDevices: SpotifyApi.UserDevice[];
+    availableDevices: PlayerDevice[];
     deviceLoadError: Error | null;
     deviceLoadInProgress: boolean;
     localDeviceId: string | null;

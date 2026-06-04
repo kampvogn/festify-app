@@ -64,6 +64,15 @@ See:
 - Avoid framework churn until the data flow no longer depends on Firebase semantics.
 - If a UI change is only cosmetic, defer it until the functional migration step is complete.
 
+## Music provider interface
+
+When `src/util/music-provider.ts` is changed — a method added, removed, renamed, or its signature updated — two things are required in the same commit:
+
+1. Update `docs/ADDING_A_MUSIC_PROVIDER.md` to reflect the new contract (interface table, checklist, example skeleton).
+2. Update every file matching `src/util/providers/*-provider.ts` to implement the change. A provider that is left missing a method, or that has a method with the wrong signature, is a build error — fix it before committing.
+
+These two requirements apply even when the change is additive and the new method has a sensible default. Do not leave provider files and documentation out of sync with the interface.
+
 ## Safety
 
 - Prefer additive changes over destructive ones.

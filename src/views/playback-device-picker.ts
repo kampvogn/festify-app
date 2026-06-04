@@ -11,11 +11,11 @@ import {
 } from '../actions/playback-spotify';
 import { isPartyOwnerSelector } from '../selectors/party';
 import { hasConnectedSpotifyAccountSelector } from '../selectors/users';
-import { State } from '../state';
+import { PlayerDevice, State } from '../state';
 import sharedStyles from '../util/shared-styles';
 
 interface PlaybackDevicePickerProps {
-    devices: SpotifyApi.UserDevice[];
+    devices: PlayerDevice[];
     deviceLoadInProgress: boolean;
     deviceLoadError: Error | null;
     isOwner: boolean;

@@ -14,8 +14,9 @@ import {
 } from '../actions/view-party';
 import { PartyViews } from '../routing';
 import { queueRouteSelector, searchRouteSelector } from '../selectors/routes';
-import { State, Track } from '../state';
-import { fetchWithAnonymousAuth } from '../util/spotify-auth';
+import { State, Track, Metadata } from '../state';
+import { SearchResult } from '../util/music-provider';
+import { getProvider } from '../util/provider-registry';
 
 function* doSearch(action) {
     const { party }: State = yield select();
@@ -36,54 +37,44 @@ function* doSearch(action) {
     const {
         party: { currentParty },
     }: State = yield select();
-    const SEARCH_LIMIT = 10;
-    let url =
-        `/search?type=track&limit=${SEARCH_LIMIT}` +
-        `&q=${encodeURIComponent(s.replace('-', ' ').trim())}`;
 
-    const tracks: SpotifyApi.TrackObjectFull[] = [];
+    const provider = getProvider('spotify');
+    let results: SearchResult[] = [];
     try {
-        // Search until we have at least 20 available and playable search results
-        while (tracks.length < 20 && url) {
-            const trackResponse = yield call(fetchWithAnonymousAuth, url);
-            if (!trackResponse.ok) {
-                const errorBody = yield trackResponse.text();
-                throw new Error(`Spotify search failed with ${trackResponse.status}: ${errorBody}`);
-            }
-
-            const resp: SpotifyApi.TrackSearchResponse = yield trackResponse.json();
-            const votableTracks = resp.tracks.items
-                //.filter((t) => t.is_playable !== false)
-                .filter((t) => {
-                    return currentParty!.settings && !currentParty!.settings!.allow_explicit_tracks
-                        ? !t.explicit
-                        : true;
-                });
-
-            tracks.push(...votableTracks);
-            url = resp.tracks.next;
-        }
+        results = yield call([provider, 'search'], s, currentParty!.country);
     } catch (e) {
         yield put(searchFail(e));
         return;
     }
 
-    const result = tracks.reduce((acc, track, i) => {
-        acc[`spotify-${track.id}`] = {
+    const allowExplicit = !currentParty!.settings || currentParty!.settings!.allow_explicit_tracks;
+    const filtered = allowExplicit ? results : results.filter(r => !r.explicit);
+
+    const trackRecords = filtered.reduce((acc, r, i) => {
+        acc[`${r.provider}-${r.id}`] = {
             added_at: Date.now(),
             is_fallback: false,
             order: i,
-            reference: {
-                provider: 'spotify',
-                id: track.id,
-            },
+            reference: { provider: r.provider, id: r.id },
             vote_count: 0,
         } as Track;
         return acc;
-    }, {});
+    }, {} as Record<string, Track>);
 
-    yield put(updateMetadata(tracks));
-    yield put(searchFinish(result));
+    const metadata = filtered.reduce((acc, r) => {
+        acc[`${r.provider}-${r.id}`] = {
+            artists: r.artists,
+            cover: r.cover,
+            durationMs: r.durationMs,
+            isPlayable: r.isPlayable,
+            isrc: r.isrc,
+            name: r.name,
+        } as Metadata;
+        return acc;
+    }, {} as Record<string, Metadata>);
+
+    yield put(updateMetadata(metadata));
+    yield put(searchFinish(trackRecords));
 }
 
 function* enforceMultiVoteSetting(ac: ReturnType<typeof setVoteAction>) {
@@ -111,8 +102,6 @@ function* updateUrl(action: ReturnType<typeof changeTrackSearchInput>) {
         return;
     }
 
-    // Replace URL if we already have an incomplete query to avoid clobbing
-    // up the users browser history.
     const routerFn = s ? replace : push;
     yield put(routerFn(searchRouteSelector(state, action.payload)!, {}));
 }

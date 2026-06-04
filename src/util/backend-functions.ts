@@ -42,7 +42,7 @@ export interface BackendTrack {
     is_fallback: boolean;
     order: number;
     reference: {
-        provider: 'spotify';
+        provider: string;
         id: string;
     };
     played_at?: number;
@@ -204,19 +204,19 @@ export const backendFunctions = {
         return getSelfHosted<BackendPartySnapshot>('/api/parties/' + encodeURIComponent(partyId));
     },
 
-    setTrackVote(data: { partyId: string; ref: { provider: 'spotify'; id: string }; vote: boolean }) {
+    setTrackVote(data: { partyId: string; ref: { provider: string; id: string }; vote: boolean }) {
         return postSelfHosted('/api/parties/' + encodeURIComponent(data.partyId) + '/tracks/vote', data);
     },
 
-    removeTrack(data: { partyId: string; ref: { provider: 'spotify'; id: string }; moveToHistory: boolean }) {
+    removeTrack(data: { partyId: string; ref: { provider: string; id: string }; moveToHistory: boolean }) {
         return postSelfHosted('/api/parties/' + encodeURIComponent(data.partyId) + '/tracks/remove', data);
     },
 
-    pinTrack(data: { partyId: string; ref: { provider: 'spotify'; id: string } }) {
+    pinTrack(data: { partyId: string; ref: { provider: string; id: string } }) {
         return postSelfHosted('/api/parties/' + encodeURIComponent(data.partyId) + '/tracks/pin', data);
     },
 
-    markTrackAsPlayed(data: { partyId: string; ref: { provider: 'spotify'; id: string } }) {
+    markTrackAsPlayed(data: { partyId: string; ref: { provider: string; id: string } }) {
         return postSelfHosted('/api/parties/' + encodeURIComponent(data.partyId) + '/tracks/played', data);
     },
 

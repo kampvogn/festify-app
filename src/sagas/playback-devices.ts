@@ -12,20 +12,15 @@ import {
 } from '../actions/playback-spotify';
 import { hasConnectedSpotifyAccountSelector } from '../selectors/users';
 import { isPartyOwnerSelector } from '../selectors/party';
-import { State } from '../state';
-import { fetchWithAccessToken } from '../util/spotify-auth';
+import { PlayerDevice, State } from '../state';
+import { getProvider } from '../util/provider-registry';
 import { call, put, select, takeEvery, takeLatest } from 'redux-saga/effects';
 
 function* refreshPlaybackDevices() {
     try {
-        const response: Response = yield call(fetchWithAccessToken, '/me/player/devices');
-        if (!response.ok) {
-            const body = yield response.text();
-            throw new Error(body || `Failed to load playback devices (${response.status})`);
-        }
-
-        const data: SpotifyApi.UserDevicesResponse = yield response.json();
-        yield put(loadPlaybackDevicesFinish(data.devices || []));
+        const provider = getProvider('spotify');
+        const devices: PlayerDevice[] = yield call([provider, 'getDevices']);
+        yield put(loadPlaybackDevicesFinish(devices));
     } catch (err) {
         yield put(loadPlaybackDevicesFail(err as Error));
     }
@@ -41,19 +36,8 @@ function* transferPlaybackDevice() {
     }
 
     try {
-        const response: Response = yield call(fetchWithAccessToken, '/me/player', {
-            method: 'put',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ device_ids: [deviceId], play: true }),
-        });
-
-        if (!response.ok) {
-            const body = yield response.text();
-            throw new Error(body || `Failed to transfer playback (${response.status})`);
-        }
-
+        const provider = getProvider('spotify');
+        yield call([provider, 'transferPlayback'], deviceId);
         yield put(transferPlaybackDeviceFinish());
         yield put(loadPlaybackDevicesStart());
     } catch (err) {
@@ -63,15 +47,8 @@ function* transferPlaybackDevice() {
 
 function* applyVolume(action: ReturnType<typeof import('../actions/playback-spotify').setVolume>) {
     try {
-        const response: Response = yield call(
-            fetchWithAccessToken,
-            `/me/player/volume?volume_percent=${action.payload}`,
-            { method: 'put' },
-        );
-        if (!response.ok && response.status !== 204) {
-            const body = yield response.text();
-            console.warn('Failed to set volume:', body || response.status);
-        }
+        const provider = getProvider('spotify');
+        yield call([provider, 'setVolume'], action.payload);
     } catch (err) {
         console.warn('Failed to set volume:', err);
     }

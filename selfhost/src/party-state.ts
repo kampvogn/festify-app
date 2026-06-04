@@ -3,7 +3,7 @@ import { rowToParty } from './parties.js';
 import { SessionUser } from './session.js';
 
 export interface TrackReference {
-    provider: 'spotify';
+    provider: string;
     id: string;
 }
 

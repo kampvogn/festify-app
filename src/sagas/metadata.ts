@@ -1,5 +1,4 @@
 import { LOCATION_CHANGED } from '@festify/redux-little-router';
-import chunk from 'lodash-es/chunk';
 import { all, call, cancel, put, select, takeEvery, takeLatest } from 'redux-saga/effects';
 
 import {
@@ -12,9 +11,9 @@ import {
 import { UPDATE_TRACKS } from '../actions/party-data';
 import { Views } from '../routing';
 import { loadFanartTracksSelector, loadMetadataSelector } from '../selectors/track';
-import { Metadata, State } from '../state';
+import { Metadata, State, TrackReference } from '../state';
 import { takeEveryWithState } from '../util/saga';
-import { fetchWithAnonymousAuth } from '../util/spotify-auth';
+import { getProvider } from '../util/provider-registry';
 
 const cache = new MetadataStore();
 
@@ -23,7 +22,6 @@ function* cacheMetadata(ac: ReturnType<typeof updateMetadata>) {
     try {
         yield cache.cacheMetadata(ac.payload);
     } catch (err) {
-        // Only warn once
         if (hasThrownIdbError) {
             return;
         }
@@ -77,39 +75,42 @@ function* watchTvMode(action, prevView: Views, newView: Views) {
 
 function* loadMetadataForNewTracks(_) {
     const state: State = yield select();
-    const remaining: string[] = loadMetadataSelector(state);
+    const remaining: TrackReference[] = loadMetadataSelector(state);
 
     if (!state.party.currentParty || !remaining.length) {
         return;
     }
 
-    /*
-     * Cached metadata lives only for twelve hours, so we can assume that the track hasn't
-     * gone unavailable during that period of time. This means we can load metadata from
-     * IDB first, and only resort to calling the Web API later.
-     */
-
     try {
-        const fullIds = remaining.map(id => `spotify-${id}`);
+        const fullIds = remaining.map(ref => `${ref.provider}-${ref.id}`);
         const cached: Record<string, Metadata> = yield cache.getMetadata(fullIds);
         yield put(updateMetadata(cached));
     } catch (err) {
-        console.warn('Failed to load cached tracks from IndexedDB. Fetching from Spotify API...');
+        console.warn('Failed to load cached tracks from IndexedDB. Fetching from provider API...');
     }
 
     const country = state.party.currentParty.country;
-    const uncached: string[] = yield select(loadMetadataSelector);
-    for (const ids of chunk(uncached, 50).filter(ch => ch.length > 0)) {
+    const uncached: TrackReference[] = yield select(loadMetadataSelector);
+
+    // Group by provider so each provider fetches its own tracks
+    const byProvider = uncached.reduce((acc, ref) => {
+        if (!acc[ref.provider]) acc[ref.provider] = [];
+        acc[ref.provider].push(ref.id);
+        return acc;
+    }, {} as Record<string, string[]>);
+
+    for (const providerName of Object.keys(byProvider)) {
+        const ids = byProvider[providerName];
         try {
-            const responses: Response[] = yield all(
-                ids.map(id => call(fetchWithAnonymousAuth, `/tracks/${id}?market=${country}`)),
+            const provider = getProvider(providerName);
+            const metadata: Record<string, Metadata> = yield call(
+                [provider, 'getMetadata'],
+                ids,
+                country,
             );
-            const tracks: SpotifyApi.TrackObjectFull[] = yield all(
-                responses.map(resp => call(() => resp.json())),
-            );
-            yield put(updateMetadata(tracks));
+            yield put(updateMetadata(metadata));
         } catch (err) {
-            console.error('Failed to load metadata for a track chunk.', err);
+            console.error(`Failed to load metadata from provider '${providerName}'.`, err);
         }
     }
 }

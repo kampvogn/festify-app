@@ -131,5 +131,5 @@ export const loadMetadataSelector = createSelector(
                 const fbId = firebaseTrackIdSelector(t);
                 return !(fbId in meta) || meta[fbId].durationMs == null;
             })
-            .map((t) => t.reference.id),
+            .map((t) => t.reference),
 );
