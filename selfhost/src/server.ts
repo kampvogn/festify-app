@@ -11,7 +11,7 @@ import { flushQueue, loadPartySnapshot, markTrackPlayed, pinTrack, removeTrack, 
 import { initRealtime, publishPartySnapshot, registerPartyStream } from './realtime.js';
 import { requireSessionUser } from './session.js';
 import { createAnonymousSession, upsertSpotifySession } from './auth.js';
-import { exchangeCode, getClientToken, refreshToken } from './spotify.js';
+import { exchangeCode, getClientToken, refreshTokenForUser } from './spotify.js';
 import { config } from './config.js';
 
 const app = Fastify({ logger: true });
@@ -239,21 +239,30 @@ app.post('/api/spotify/client-token', async () => {
     return getClientToken();
 });
 
-app.post('/api/spotify/exchange-code', async (request) => {
+app.post('/api/spotify/exchange-code', async (request, reply) => {
     const body = z.object({
         callbackUrl: z.string().url(),
         code: z.string().min(1),
     }).parse(request.body);
 
-    return exchangeCode(body.callbackUrl, body.code);
+    const result = await exchangeCode(body.callbackUrl, body.code);
+
+    // Store refresh token in a short-lived httpOnly cookie scoped to link-account.
+    // It is never sent to the browser as JSON — only the access token is returned.
+    reply.setCookie('spotifyPendingRefreshToken', result.encryptedRefreshToken, {
+        httpOnly: true,
+        secure: config.publicOrigin.startsWith('https'),
+        sameSite: 'strict',
+        path: '/api/spotify/link-account',
+        maxAge: 60 * 10,
+    });
+
+    return { accessToken: result.accessToken, expiresIn: result.expiresIn };
 });
 
 app.post('/api/spotify/refresh-token', async (request) => {
-    const body = z.object({
-        refreshToken: z.string().min(1),
-    }).parse(request.body);
-
-    return refreshToken(body.refreshToken);
+    const user = await requireSessionUser(request);
+    return refreshTokenForUser(user.id);
 });
 
 app.post('/api/spotify/link-account', async (request, reply) => {
@@ -261,7 +270,15 @@ app.post('/api/spotify/link-account', async (request, reply) => {
         accessToken: z.string().min(1),
     }).parse(request.body);
 
-    const result = await upsertSpotifySession(body.accessToken);
+    const encryptedRefreshToken = request.cookies['spotifyPendingRefreshToken'];
+    if (!encryptedRefreshToken) {
+        reply.code(400);
+        return { error: 'Missing pending refresh token. Please restart the login flow.' };
+    }
+
+    reply.clearCookie('spotifyPendingRefreshToken', { path: '/api/spotify/link-account' });
+
+    const result = await upsertSpotifySession(body.accessToken, encryptedRefreshToken);
     setSessionCookie(reply, result.sessionToken);
     return result;
 });

@@ -11,7 +11,6 @@ export interface ClientTokenResult {
 }
 
 export interface ExchangeCodeResult extends ClientTokenResult {
-    refreshToken: string;
     tokenType?: string;
 }
 
@@ -160,12 +159,12 @@ export const backendFunctions = {
         return firebaseFunctions.exchangeCode(data) as any;
     },
 
-    refreshToken(data: { refreshToken: string }): Promise<CallableResult<ClientTokenResult>> {
+    refreshToken(): Promise<CallableResult<ClientTokenResult>> {
         if (isSelfHostedBackend) {
-            return postSelfHosted<ClientTokenResult>('/api/spotify/refresh-token', data);
+            return postSelfHosted<ClientTokenResult>('/api/spotify/refresh-token');
         }
 
-        return firebaseFunctions.refreshToken(data) as any;
+        return firebaseFunctions.refreshToken({}) as any;
     },
 
     isSpotifyUser(data: { email: string }) {

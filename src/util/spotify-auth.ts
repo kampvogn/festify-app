@@ -32,14 +32,8 @@ async function _requireAccessToken(): Promise<string> {
         return authData.accessToken;
     }
 
-    if (!authData.refreshToken) {
-        throw new Error('Missing refresh token.');
-    }
-
-    const { accessToken, expiresIn } = (
-        await backendFunctions.refreshToken({ refreshToken: authData.refreshToken })
-    ).data;
-    authData = new AuthData(accessToken, Date.now() + expiresIn * 1000, authData.refreshToken);
+    const { accessToken, expiresIn } = (await backendFunctions.refreshToken()).data;
+    authData = new AuthData(accessToken, Date.now() + expiresIn * 1000);
     authData.saveTo(LOCALSTORAGE_KEY);
 
     return authData.accessToken;

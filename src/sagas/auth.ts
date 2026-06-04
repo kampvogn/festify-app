@@ -176,9 +176,9 @@ function* handleSpotifyOAuth() {
         return;
     }
 
-    const { accessToken, expiresIn, refreshToken } = resp.data;
+    const { accessToken, expiresIn } = resp.data;
 
-    const data = new AuthData(accessToken, Date.now() + expiresIn * 1000, refreshToken);
+    const data = new AuthData(accessToken, Date.now() + expiresIn * 1000);
     yield apply(data, data.saveTo, [LOCALSTORAGE_KEY]);
 
     let sessionData: SessionResult | null = null;

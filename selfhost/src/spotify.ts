@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { config, requireConfig } from './config.js';
 import { decrypt, encrypt } from './crypto.js';
+import { pool } from './db.js';
 
 const tokenResponseSchema = z.object({
     access_token: z.string(),
@@ -44,11 +45,11 @@ export async function exchangeCode(callbackUrl: string, code: string) {
     return {
         accessToken: body.access_token,
         expiresIn: body.expires_in,
-        refreshToken: encrypt(
+        // Encrypted refresh token — stored server-side, never sent to the browser
+        encryptedRefreshToken: encrypt(
             requireConfig(body.refresh_token || '', 'spotify refresh_token'),
             requireConfig(config.tokenEncryptionSecret, 'TOKEN_ENCRYPTION_SECRET'),
         ),
-        tokenType: body.token_type,
     };
 }
 
@@ -61,19 +62,40 @@ export async function getClientToken() {
     };
 }
 
-export async function refreshToken(refreshToken: string) {
-    const decryptedRefreshToken = decrypt(
-        refreshToken,
+export async function refreshTokenForUser(userId: string): Promise<{ accessToken: string; expiresIn: number }> {
+    const result = await pool.query<{ spotify_refresh_token: string | null }>(
+        'SELECT spotify_refresh_token FROM users WHERE id = $1',
+        [userId],
+    );
+
+    const encryptedToken = result.rows[0]?.spotify_refresh_token;
+    if (!encryptedToken) {
+        throw new Error('No Spotify refresh token on file. Please reconnect your Spotify account.');
+    }
+
+    const decryptedToken = decrypt(
+        encryptedToken,
         requireConfig(config.tokenEncryptionSecret, 'TOKEN_ENCRYPTION_SECRET'),
     );
+
     const body = await spotifyTokenRequest({
         grant_type: 'refresh_token',
-        refresh_token: decryptedRefreshToken,
+        refresh_token: decryptedToken,
     });
+
+    // Spotify may rotate the refresh token — store the latest one
+    if (body.refresh_token) {
+        await pool.query(
+            'UPDATE users SET spotify_refresh_token = $1, updated_at = now() WHERE id = $2',
+            [
+                encrypt(body.refresh_token, requireConfig(config.tokenEncryptionSecret, 'TOKEN_ENCRYPTION_SECRET')),
+                userId,
+            ],
+        );
+    }
 
     return {
         accessToken: body.access_token,
         expiresIn: body.expires_in,
     };
 }
-

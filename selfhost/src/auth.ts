@@ -88,7 +88,7 @@ export async function createAnonymousSession() {
     };
 }
 
-export async function upsertSpotifySession(accessToken: string) {
+export async function upsertSpotifySession(accessToken: string, encryptedRefreshToken: string) {
     const response = await fetch('https://api.spotify.com/v1/me', {
         headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -115,16 +115,17 @@ export async function upsertSpotifySession(accessToken: string) {
     const spotifyId = `spotify:user:${spotifyUser.id}`;
 
     const result = await pool.query(
-        `INSERT INTO users (email, display_name, photo_url, spotify_id, spotify_is_premium)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO users (email, display_name, photo_url, spotify_id, spotify_is_premium, spotify_refresh_token)
+         VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (spotify_id) DO UPDATE SET
              email = EXCLUDED.email,
              display_name = EXCLUDED.display_name,
              photo_url = EXCLUDED.photo_url,
              spotify_is_premium = EXCLUDED.spotify_is_premium,
+             spotify_refresh_token = EXCLUDED.spotify_refresh_token,
              updated_at = now()
          RETURNING id, email, display_name, photo_url, spotify_is_premium`,
-        [spotifyUser.email || null, displayName, photoUrl, spotifyId, spotifyUser.product === 'premium'],
+        [spotifyUser.email || null, displayName, photoUrl, spotifyId, spotifyUser.product === 'premium', encryptedRefreshToken],
     );
     const user = rowToApiUser(result.rows[0], false);
 
