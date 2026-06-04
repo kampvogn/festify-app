@@ -52,7 +52,13 @@ app.setErrorHandler((error, request, reply) => {
     const err = error instanceof Error ? error : new Error(String(error));
     request.log.error(err);
 
-    if (err.message === 'Missing bearer token.' || err.message === 'Session user not found.') {
+    if (
+        err.message === 'Missing bearer token.' ||
+        err.message === 'Session user not found.' ||
+        err.message === 'Session token has expired.' ||
+        err.message === 'Invalid session token.' ||
+        err.message === 'Invalid session signature.'
+    ) {
         reply.code(401).send({ error: 'Unauthorized', message: err.message });
         return;
     }

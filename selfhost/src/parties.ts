@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import { z } from 'zod';
 
 import { assertAllowedHostEmail } from './auth.js';
@@ -16,7 +17,7 @@ function possessiveName(displayName: string): string {
 }
 
 function randomShortId(): string {
-    return String(Math.floor(Math.random() * 1000000)).padStart(6, '0');
+    return String(randomInt(1000000)).padStart(6, '0');
 }
 
 function defaultPlayback(createdAt: number) {

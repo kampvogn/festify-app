@@ -6,6 +6,7 @@ import { config, requireConfig } from './config.js';
 import { pool } from './db.js';
 
 const TOKEN_VERSION = 'v1';
+const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 export interface ApiUser {
     uid: string;
@@ -50,9 +51,13 @@ export function verifySessionToken(token: string): string {
         throw new Error('Invalid session signature.');
     }
 
-    const claims = z.object({ sub: z.string().uuid() }).parse(
+    const claims = z.object({ sub: z.string().uuid(), iat: z.number() }).parse(
         JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')),
     );
+
+    if (Date.now() - claims.iat > TOKEN_TTL_MS) {
+        throw new Error('Session token has expired.');
+    }
     return claims.sub;
 }
 
