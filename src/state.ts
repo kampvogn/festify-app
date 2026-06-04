@@ -1,5 +1,4 @@
 import { Location } from '@festify/redux-little-router';
-import { User } from '@firebase/auth-types';
 
 import { OAuthLoginProviders } from './actions/auth';
 import { domainSelector } from './selectors/domain';
@@ -207,12 +206,7 @@ export interface AuthProviderStatus<T> {
 }
 
 export interface UserCredentials {
-    facebook: AuthProviderStatus<User>;
-    firebase: AuthProviderStatus<User>;
-    github: AuthProviderStatus<User>;
-    google: AuthProviderStatus<User>;
     spotify: AuthProviderStatus<SpotifyApi.UserObjectPrivate>;
-    twitter: AuthProviderStatus<User>;
 }
 
 export type EnabledProvidersList = {
@@ -222,13 +216,7 @@ export type EnabledProvidersList = {
 // tslint:disable-next-line:no-namespace
 export namespace EnabledProvidersList {
     export function enable(overrides: OAuthLoginProviders[]): EnabledProvidersList {
-        const result = {
-            facebook: false,
-            github: false,
-            google: false,
-            spotify: false,
-            twitter: false,
-        };
+        const result = { spotify: false };
         overrides.forEach(prov => (result[prov] = true));
         return result;
     }

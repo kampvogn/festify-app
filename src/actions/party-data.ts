@@ -1,8 +1,6 @@
 import { ConnectionState, Party, PartySettings, Playback, Track } from '../state';
 import { requireAuth } from '../util/auth';
-import { isSelfHostedBackend } from '../util/backend';
 import { backendFunctions } from '../util/backend-functions';
-import firebase, { firebaseNS } from '../util/firebase';
 
 export type Actions =
     | ReturnType<typeof becomePlaybackMaster>
@@ -118,86 +116,22 @@ export async function createNewParty(
     country: string,
     settings: PartySettings,
     name?: string | null,
- ): Promise<string> {
+): Promise<string> {
     const authUser = await requireAuth();
     if (!authUser) {
         throw new Error('Authentication is required to create parties.');
     }
 
-    const { uid } = authUser;
-
-    if (isSelfHostedBackend) {
-        const { data } = await backendFunctions.createParty({
-            displayName,
-            ...(name ? { name } : {}),
-            country,
-            settings,
-        });
-        return data.id;
-    }
-
-    const now = firebaseNS.database!.ServerValue.TIMESTAMP;
-    const userNamePosessive = displayName.endsWith('s') ? "'" : "'s";
-
-    const party: Party = {
+    const { data } = await backendFunctions.createParty({
+        displayName,
+        ...(name ? { name } : {}),
         country,
-        created_at: now as any,
-        created_by: uid,
-        name: `${displayName}${userNamePosessive} Party`,
-        playback: {
-            last_change: now as any,
-            last_position_ms: 0,
-            master_id: null,
-            playing: false,
-            target_playing: null,
-        },
         settings,
-        short_id: String(Math.floor(Math.random() * 1000000)),
-    };
-
-    if (!firebase) {
-        throw new Error('Firebase is unavailable in this build.');
-    }
-
-    const result = await firebase
-        .database()
-        .ref('/parties')
-        .push(party);
-
-    if (!result.key) {
-        throw new Error('Missing ID of newly created party!');
-    }
-
-    return result.key;
+    });
+    return data.id;
 }
 
 export async function resolveShortId(shortId: string): Promise<string | null> {
-    if (isSelfHostedBackend) {
-        const { data } = await backendFunctions.resolveParty(shortId);
-        return data.partyId;
-    }
-
-    if (!firebase) {
-        throw new Error('Firebase is unavailable in this build.');
-    }
-
-    const snapshot = await firebase
-        .database()
-        .ref('/parties')
-        .orderByChild('short_id')
-        .equalTo(shortId)
-        .once('value');
-
-    if (snapshot.numChildren() < 1) {
-        return null;
-    }
-
-    const result: Record<string, Party> = snapshot.val();
-    const possibleLongId = Object.keys(result).reduce(
-        (acc, k) =>
-            result[k].created_at > (result[acc] || { created_at: -1 }).created_at ? k : acc,
-        '',
-    );
-
-    return possibleLongId || null; // Filter out empty IDs
+    const { data } = await backendFunctions.resolveParty(shortId);
+    return data.partyId;
 }

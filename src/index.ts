@@ -19,7 +19,6 @@ const bundleVersion = currentScript
     : null;
 
 console.info('Festify bootstrap', {
-    backendType: backendConfig.type,
     apiUrl: backendConfig.apiUrl,
     bundleVersion,
     realtimeUrl: backendConfig.realtimeUrl,

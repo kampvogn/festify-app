@@ -2,9 +2,7 @@ import { push } from '@festify/redux-little-router';
 import { call, put, select, takeEvery, takeLatest } from 'redux-saga/effects';
 
 import { showToast } from '../actions';
-import { fetchWithAccessToken } from '../util/spotify-auth';
 import { currentAuthUser } from '../util/auth';
-import { isSelfHostedBackend } from '../util/backend';
 import { backendFunctions, BackendUser } from '../util/backend-functions';
 import { NOTIFY_AUTH_STATUS_KNOWN } from '../actions/auth';
 import {
@@ -38,42 +36,19 @@ function* loadMyParties() {
 }
 
 function* createParty() {
-    const { player, user, homeView }: State = yield select();
-    const spotifyProfile = user.credentials.spotify.user;
+    const { player, homeView }: State = yield select();
 
-    let userDisplayName = '';
-    let userCountry = spotifyProfile ? spotifyProfile.country : 'US';
-    let hasPremium = false;
-
-    if (isSelfHostedBackend) {
-        const backendUser = currentAuthUser() as BackendUser | null;
-        if (!backendUser || backendUser.isAnonymous) {
-            const e = new Error('Missing Spotify user');
-            yield put(createPartyFail(e));
-            yield put(showToast('Please log in with Spotify again before hosting a party.', 10000));
-            return;
-        }
-
-        userDisplayName = backendUser.displayName || backendUser.email || backendUser.uid;
-        hasPremium = Boolean(backendUser.spotifyIsPremium);
-    } else {
-        let spotifyUser = spotifyProfile;
-        if (!spotifyUser) {
-            try {
-                const resp = yield call(fetchWithAccessToken, '/me');
-                spotifyUser = yield resp.json();
-            } catch (err) {
-                const e = new Error('Missing Spotify user');
-                yield put(createPartyFail(e));
-                yield put(showToast('Please log in with Spotify again before hosting a party.', 10000));
-                return;
-            }
-        }
-
-        userDisplayName = spotifyUser ? (spotifyUser.display_name || spotifyUser.id) : '';
-        userCountry = spotifyUser ? spotifyUser.country : userCountry;
-        hasPremium = Boolean(spotifyUser && spotifyUser.product === 'premium');
+    const backendUser = currentAuthUser() as BackendUser | null;
+    if (!backendUser || backendUser.isAnonymous) {
+        const e = new Error('Missing Spotify user');
+        yield put(createPartyFail(e));
+        yield put(showToast('Please log in with Spotify again before hosting a party.', 10000));
+        return;
     }
+
+    const userDisplayName = backendUser.displayName || backendUser.email || backendUser.uid;
+    const userCountry = 'DK';
+    const hasPremium = Boolean(backendUser.spotifyIsPremium);
 
     if (!hasPremium) {
         const e = new Error('To create parties and play music on Festify, you need a Spotify Premium account.');
@@ -106,16 +81,14 @@ function* joinParty(ac: ReturnType<typeof joinPartyStart>) {
     const { homeView }: State = yield select();
 
     if (!homeView.partyIdValid) {
-        const e = new Error('Party ID is invalid!');
-        yield put(joinPartyFail(e));
+        yield put(joinPartyFail(new Error('Party ID is invalid!')));
         return;
     }
 
     const longId = yield call(resolveShortId, homeView.partyId);
 
     if (!longId) {
-        const e = new Error('Party not found!');
-        yield put(joinPartyFail(e));
+        yield put(joinPartyFail(new Error('Party not found!')));
         return;
     }
 
@@ -135,7 +108,6 @@ function* renameParty(ac: ReturnType<typeof renamePartyStart>) {
     const { partyId, name } = ac.payload;
     try {
         yield call(backendFunctions.renameParty, partyId, name);
-        // Update the name in the local list without a full reload
         const { homeView }: State = yield select();
         const updated = (homeView.myParties || []).map(p =>
             p.id === partyId ? { ...p, name } : p,
@@ -153,42 +125,22 @@ function* onAuthStatusKnown() {
         return;
     }
 
-    if (isSelfHostedBackend) {
-        const backendUser = currentAuthUser() as BackendUser | null;
-        if (!backendUser || backendUser.isAnonymous) {
-            return;
-        }
-
-        if (!backendUser.spotifyIsPremium) {
-            yield put(
-                showToast(
-                    // tslint:disable-next-line:max-line-length
-                    "To create parties and play music on Festify, you need to have a 'Spotify Premium' account. Please login again using a premium account if you want to host parties.",
-                    10000,
-                ),
-            );
-            return;
-        }
-
-        yield call(loadMyParties);
+    const backendUser = currentAuthUser() as BackendUser | null;
+    if (!backendUser || backendUser.isAnonymous) {
         return;
     }
 
-    try {
-        const resp = yield call(fetchWithAccessToken, '/me');
-        const spotifyUser = yield resp.json();
-        if (!spotifyUser || spotifyUser.product !== 'premium') {
-            yield put(
-                showToast(
-                    // tslint:disable-next-line:max-line-length
-                    "To create parties and play music on Festify, you need to have a 'Spotify Premium' account. Please login again using a premium account if you want to host parties.",
-                    10000,
-                ),
-            );
-        }
-    } catch (err) {
+    if (!backendUser.spotifyIsPremium) {
+        yield put(
+            showToast(
+                "To create parties and play music on Festify, you need to have a 'Spotify Premium' account. Please login again using a premium account if you want to host parties.",
+                10000,
+            ),
+        );
         return;
     }
+
+    yield call(loadMyParties);
 }
 
 export default function*() {

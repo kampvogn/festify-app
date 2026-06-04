@@ -18,7 +18,6 @@ import {
 import { State, MyParty } from '../state';
 import { currentAuthUser } from '../util/auth';
 import { BackendUser } from '../util/backend-functions';
-import { isSelfHostedBackend } from '../util/backend';
 import festifyLogo from '../util/festify-logo';
 import sharedStyles from '../util/shared-styles';
 
@@ -338,12 +337,7 @@ const mapStateToProps = (state: State): HomeViewProps => {
     return {
         ...state.homeView,
         authorizationInProgress: state.user.credentials.spotify.authorizing,
-        authorizedAndPremium: isSelfHostedBackend
-            ? Boolean(backendUser && !backendUser.isAnonymous && backendUser.spotifyIsPremium)
-            : Boolean(
-                  state.user.credentials.spotify.user &&
-                      state.user.credentials.spotify.user.product === 'premium',
-              ),
+        authorizedAndPremium: Boolean(backendUser && !backendUser.isAnonymous && backendUser.spotifyIsPremium),
         authStatusKnown: state.user.credentials.spotify.statusKnown,
         playerCompatible: state.player.isCompatible,
         backendUser,

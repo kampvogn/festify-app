@@ -3,7 +3,6 @@ import {
     EXCHANGE_CODE,
     EXCHANGE_CODE_FAIL,
     NOTIFY_AUTH_STATUS_KNOWN,
-    REQUIRE_FOLLOW_UP_LOGIN,
 } from '../actions/auth';
 import { CHANGE_DISPLAY_LOGIN_MODAL } from '../actions/view-party';
 import { UPDATE_USER_PLAYLISTS } from '../actions/view-party-settings';
@@ -19,21 +18,16 @@ const defaultUser = <T>(): AuthProviderStatus<T> => ({
 export default function(
     state: UserState = {
         credentials: {
-            facebook: defaultUser(),
-            firebase: defaultUser(),
-            github: defaultUser(),
-            google: defaultUser(),
             spotify: defaultUser(),
-            twitter: defaultUser(),
         },
         needsFollowUpSignInWithProviders: null,
         playlists: [],
     },
     action: Actions,
 ): UserState {
-    function reduceAuthProvider<T>(
+    function reduceAuthProvider(
         prov: keyof UserCredentials,
-        data: Partial<AuthProviderStatus<T>>,
+        data: Partial<AuthProviderStatus<SpotifyApi.UserObjectPrivate>>,
     ): UserState {
         return {
             ...state,
@@ -76,11 +70,6 @@ export default function(
                 statusKnown: true,
                 user: action.payload.data,
             });
-        case REQUIRE_FOLLOW_UP_LOGIN:
-            return {
-                ...state,
-                needsFollowUpSignInWithProviders: action.payload,
-            };
         case UPDATE_USER_PLAYLISTS:
             return {
                 ...state,

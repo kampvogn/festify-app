@@ -1,11 +1,9 @@
 import { push, LOCATION_CHANGED } from '@festify/redux-little-router';
-import { User } from '@firebase/auth-types';
-import { DataSnapshot } from '@firebase/database-types';
 import { Channel, END, eventChannel } from 'redux-saga';
 import { delay } from 'redux-saga';
-import { all, call, cancel, cancelled, fork, put, select, take, takeEvery } from 'redux-saga/effects';
+import { call, cancel, cancelled, fork, put, select, take, takeEvery } from 'redux-saga/effects';
 
-import { notifyAuthStatusKnown, NOTIFY_AUTH_STATUS_KNOWN } from '../actions/auth';
+import { NOTIFY_AUTH_STATUS_KNOWN } from '../actions/auth';
 import {
     becomePlaybackMaster,
     cleanupParty,
@@ -24,62 +22,12 @@ import { isPartyOwnerSelector, partyIdSelector } from '../selectors/party';
 import { ConnectionState, Party, State } from '../state';
 import { store } from '../store';
 import { requireAuth } from '../util/auth';
-import { backendConfig, isSelfHostedBackend } from '../util/backend';
+import { backendConfig } from '../util/backend';
 import { backendFunctions } from '../util/backend-functions';
-import firebase, { firebaseNS, valuesChannel } from '../util/firebase';
 
 import managePlaybackState from './playback-state';
 import manageQueue from './queue';
 import { managePartySettings } from './view-party-settings';
-
-function* publishConnectionStateUpdates(snap: DataSnapshot) {
-    const state = snap.val() ? ConnectionState.Connected : ConnectionState.Disconnected;
-
-    yield put(updateConnectionState(state));
-}
-function* publishTrackUpdates(snap: DataSnapshot) {
-    yield put(updateTracks(snap.val()));
-}
-function* publishUserVoteUpdates(snap: DataSnapshot) {
-    yield put(updateUserVotes(snap.val()));
-}
-function* publishPartyUpdates(snap: DataSnapshot) {
-    const party: Party | null = snap.val();
-
-    if (!party) {
-        return;
-    }
-
-    const state1: State = yield select();
-    yield put(updateParty(party));
-
-    const state2: State = yield select();
-    if (!isPartyOwnerSelector(state2) || !state1.party.currentParty) {
-        return;
-    }
-
-    // Become playback master if: there hasn't been a party before, or the old party's master ID
-    // wasn't equal to the instance it, and now it is.
-    // Resign if we don't have a party anymore, or we were master and now we aren't anymore.
-
-    if (
-        state1.party.currentParty.playback &&
-        state1.party.currentParty.playback.master_id !== state1.player.instanceId &&
-        party.playback &&
-        party.playback.master_id === state1.player.instanceId
-    ) {
-        yield put(becomePlaybackMaster());
-    } else if (
-        (!state2.party.currentParty ||
-            (state1.party.currentParty.playback &&
-                state1.party.currentParty.playback.master_id === state1.player.instanceId)) &&
-        party.playback &&
-        party.playback.master_id !== state1.player.instanceId
-    ) {
-        yield put(resignPlaybackMaster());
-    }
-}
-
 
 type SelfHostedSnapshot = { party: Party; tracks: Record<string, any>; userVotes: Record<string, boolean> };
 
@@ -115,7 +63,7 @@ function* publishSelfHostedSnapshot(snapshot: SelfHostedSnapshot) {
 
 function parseSseEvent(block: string): SelfHostedSnapshot | null {
     const lines = block.split(/\r?\n/);
-    const data = lines.filter(line => line.startsWith('data:')).map(line => line.slice(5).replace(/^\s+/, "")).join('\n');
+    const data = lines.filter(line => line.startsWith('data:')).map(line => line.slice(5).replace(/^\s+/, '')).join('\n');
     if (!data) {
         return null;
     }
@@ -138,9 +86,7 @@ function createSelfHostedSnapshotChannel(partyId: string) {
                     `${backendConfig.apiUrl}/api/parties/${encodeURIComponent(partyId)}/events`,
                     {
                         credentials: 'include',
-                        headers: {
-                            Accept: 'text/event-stream',
-                        },
+                        headers: { Accept: 'text/event-stream' },
                         signal: controller.signal,
                     },
                 );
@@ -216,6 +162,7 @@ function* watchSelfHostedPartyUpdates(partyId: string) {
         yield delay(2000);
     }
 }
+
 function* loadParty() {
     const closeListener = (e: BeforeUnloadEvent) => {
         const { party, player } = store.getState();
@@ -236,103 +183,27 @@ function* loadParty() {
     while (true) {
         const { payload: id }: ReturnType<typeof openPartyStart> = yield take(OPEN_PARTY_START);
 
-        if (isSelfHostedBackend) {
-            try {
-                yield call(requireAuth);
-                const { data: snapshot } = yield call(backendFunctions.getParty, id);
-                yield* publishSelfHostedSnapshot(snapshot);
-                yield put(openPartyFinish(snapshot.party));
-            } catch (err) {
-                yield put(openPartyFail(err));
-                yield put(push('/'));
-                continue;
-            }
-
-            const partySettings = yield fork(managePartySettings, id);
-            const playbackManager = yield fork(managePlaybackState, id);
-            const queueManager = yield fork(manageQueue, id);
-            const selfHostedUpdates = yield fork(watchSelfHostedPartyUpdates, id);
-
-            window.onbeforeunload = closeListener;
-
-            yield take(CLEANUP_PARTY);
-
-            yield cancel(partySettings, playbackManager, queueManager, selfHostedUpdates);
-            continue;
-        }
-
-        if (!firebase) {
-            throw new Error('Firebase is unavailable in this build.');
-        }
-
-        const partyRef: Channel<DataSnapshot> = yield call(
-            valuesChannel,
-            firebase
-                .database()
-                .ref('/parties/')
-                .child(id),
-        );
-        const partySnap: DataSnapshot = yield take(partyRef);
-
-        if (!partySnap.exists()) {
-            yield put(openPartyFail(new Error('Party not found!')));
+        try {
+            yield call(requireAuth);
+            const { data: snapshot } = yield call(backendFunctions.getParty, id);
+            yield* publishSelfHostedSnapshot(snapshot);
+            yield put(openPartyFinish(snapshot.party));
+        } catch (err) {
+            yield put(openPartyFail(err));
             yield put(push('/'));
             continue;
         }
 
-        yield* publishPartyUpdates(partySnap);
-
-        const { uid }: User = yield call(requireAuth);
-        const party: Party = partySnap.val();
-
-        const tracksRef: Channel<DataSnapshot> = yield call(
-            valuesChannel,
-            firebase
-                .database()
-                .ref('/tracks')
-                .child(id),
-        );
-        const votesRef: Channel<DataSnapshot> = yield call(
-            valuesChannel,
-            firebase
-                .database()
-                .ref('/votes_by_user')
-                .child(id)
-                .child(uid),
-        );
-        const connection: Channel<DataSnapshot> = yield call(
-            valuesChannel,
-            firebase.database().ref('.info/connected'),
-        );
-
-        yield takeEvery(connection, publishConnectionStateUpdates);
-        yield takeEvery(partyRef, publishPartyUpdates);
-        yield takeEvery(tracksRef, publishTrackUpdates);
-        yield takeEvery(votesRef, publishUserVoteUpdates);
-
         const partySettings = yield fork(managePartySettings, id);
         const playbackManager = yield fork(managePlaybackState, id);
         const queueManager = yield fork(manageQueue, id);
-
-        yield firebase
-            .database()
-            .ref('/user_parties')
-            .child(uid)
-            .child(id)
-            .set(firebaseNS.database!.ServerValue.TIMESTAMP);
+        const selfHostedUpdates = yield fork(watchSelfHostedPartyUpdates, id);
 
         window.onbeforeunload = closeListener;
 
-        yield put(openPartyFinish(party));
-
         yield take(CLEANUP_PARTY);
 
-        yield cancel(partySettings, playbackManager, queueManager);
-
-        connection.close();
-        partyRef.close();
-        tracksRef.close();
-        votesRef.close();
+        yield cancel(partySettings, playbackManager, queueManager, selfHostedUpdates);
     }
 }
 
@@ -352,24 +223,11 @@ function* watchRoute() {
             yield put(cleanupParty());
         }
 
-        oldPartyId = partyId;
-    }
-}
-
-function* watchLogin() {
-    while (true) {
-        const ac: ReturnType<typeof notifyAuthStatusKnown> = yield take(NOTIFY_AUTH_STATUS_KNOWN);
-        const partyId: string = yield select(partyIdSelector);
-
-        if (!partyId || !ac.payload.data) {
-            continue;
-        }
-
-        yield put(cleanupParty());
-        yield put(openPartyStart(partyId));
+        oldPartyId = partyId || '';
     }
 }
 
 export default function*() {
-    yield all([loadParty(), watchRoute(), watchLogin()]);
+    yield fork(loadParty);
+    yield fork(watchRoute);
 }

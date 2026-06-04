@@ -1,4 +1,3 @@
-import { User } from '@firebase/auth-types';
 import { call, fork, put, select, take, takeEvery } from 'redux-saga/effects';
 
 import { showToast } from '../actions';
@@ -22,10 +21,9 @@ import {
 } from '../selectors/track';
 import { ConnectionState, State, Track } from '../state';
 import { requireAuth } from '../util/auth';
-import { isSelfHostedBackend } from '../util/backend';
-import { backendFunctions } from '../util/backend-functions';
+import { BackendUser, backendFunctions } from '../util/backend-functions';
 
-function* refreshSelfHostedParty(partyId: string) {
+function* refreshParty(partyId: string) {
     const { data: snapshot } = yield call(backendFunctions.getParty, partyId);
     yield put(updateParty(snapshot.party));
     yield put(updateTracks(snapshot.tracks));
@@ -45,17 +43,13 @@ function* pinTopTrack(partyId: string) {
         const isPlaybackMaster = isPlaybackMasterSelector(state);
         const newTopTrack = currentTrackSelector(state);
 
-        // Do nothing if we're not owner, if there is an existing other playback
-        // master, if we've got no track to pin, or if the current track hasn't changed.
         if (!isOwner || !isPlaybackMaster || !newTopTrack || tracksEqual(topTrack, newTopTrack)) {
             continue;
         }
 
         topTrack = newTopTrack;
         yield call(pinTrack, partyId, newTopTrack.reference);
-        if (isSelfHostedBackend) {
-            yield call(refreshSelfHostedParty, partyId);
-        }
+        yield call(refreshParty, partyId);
     }
 }
 
@@ -66,9 +60,7 @@ function* removeTrack(partyId: string, ac: ReturnType<typeof removeTrackAction>)
         const track = singleTrackSelector(state, firebaseTrackIdSelector(ref));
 
         yield call(doRemoveTrack, partyId, track, moveToHistory);
-        if (isSelfHostedBackend) {
-            yield call(refreshSelfHostedParty, partyId);
-        }
+        yield call(refreshParty, partyId);
     } catch (err) {
         yield put(showToast(`Failed to remove track: ${err}`));
     }
@@ -77,8 +69,8 @@ function* removeTrack(partyId: string, ac: ReturnType<typeof removeTrackAction>)
 function* setVote(partyId: string, ac: ReturnType<typeof setVoteAction>) {
     const { party }: State = yield select();
     if (party.currentParty!.settings && !party.currentParty!.settings!.allow_anonymous_voters) {
-        const user: User = yield call(requireAuth);
-        if (user.isAnonymous) {
+        const user: BackendUser | null = yield call(requireAuth);
+        if (!user || user.isAnonymous) {
             yield put(changeDisplayLoginModal(true));
             return;
         }
@@ -88,9 +80,7 @@ function* setVote(partyId: string, ac: ReturnType<typeof setVoteAction>) {
     yield put(setVoteAction(ref, vote));
     try {
         yield call(doSetVote, partyId, ref, vote);
-        if (isSelfHostedBackend) {
-            yield call(refreshSelfHostedParty, partyId);
-        }
+        yield call(refreshParty, partyId);
     } catch (err) {
         yield put(showToast(`Failed to toggle vote: ${err}`));
     }

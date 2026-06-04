@@ -1,5 +1,4 @@
-import { backendConfig, isSelfHostedBackend } from './backend';
-import { functions as firebaseFunctions } from './firebase';
+import { backendConfig } from './backend';
 
 export interface CallableResult<T> {
     data: T;
@@ -65,6 +64,22 @@ export interface BackendPartySnapshot {
     userVotes: Record<string, boolean>;
 }
 
+async function postSelfHosted<T>(path: string, body?: object): Promise<CallableResult<T>> {
+    const response = await fetch(backendConfig.apiUrl + path, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {}),
+    });
+
+    if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || 'Backend request failed with ' + response.status);
+    }
+
+    return { data: await response.json() };
+}
+
 async function patchSelfHosted<T>(path: string, body: object): Promise<CallableResult<T>> {
     const response = await fetch(backendConfig.apiUrl + path, {
         method: 'PATCH',
@@ -75,7 +90,7 @@ async function patchSelfHosted<T>(path: string, body: object): Promise<CallableR
 
     if (!response.ok) {
         const message = await response.text();
-        throw new Error(message || 'Self-hosted backend request failed with ' + response.status);
+        throw new Error(message || 'Backend request failed with ' + response.status);
     }
 
     return { data: await response.json() };
@@ -89,7 +104,7 @@ async function deleteSelfHosted<T>(path: string): Promise<CallableResult<T>> {
 
     if (!response.ok) {
         const message = await response.text();
-        throw new Error(message || 'Self-hosted backend request failed with ' + response.status);
+        throw new Error(message || 'Backend request failed with ' + response.status);
     }
 
     return { data: await response.json() };
@@ -102,25 +117,7 @@ async function getSelfHosted<T>(path: string): Promise<CallableResult<T>> {
 
     if (!response.ok) {
         const message = await response.text();
-        throw new Error(message || 'Self-hosted backend request failed with ' + response.status);
-    }
-
-    return { data: await response.json() };
-}
-
-async function postSelfHosted<T>(path: string, body?: object): Promise<CallableResult<T>> {
-    const response = await fetch(backendConfig.apiUrl + path, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body || {}),
-    });
-
-    if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || 'Self-hosted backend request failed with ' + response.status);
+        throw new Error(message || 'Backend request failed with ' + response.status);
     }
 
     return { data: await response.json() };
@@ -128,11 +125,7 @@ async function postSelfHosted<T>(path: string, body?: object): Promise<CallableR
 
 export const backendFunctions = {
     anonymousAuth(): Promise<CallableResult<SessionResult>> {
-        if (isSelfHostedBackend) {
-            return postSelfHosted<SessionResult>('/api/auth/anonymous');
-        }
-
-        throw new Error('Anonymous backend auth is only available with the self-hosted backend.');
+        return postSelfHosted<SessionResult>('/api/auth/anonymous');
     },
 
     getMe(): Promise<CallableResult<BackendUser>> {
@@ -144,39 +137,19 @@ export const backendFunctions = {
     },
 
     clientToken(): Promise<CallableResult<ClientTokenResult>> {
-        if (isSelfHostedBackend) {
-            return postSelfHosted<ClientTokenResult>('/api/spotify/client-token');
-        }
-
-        return firebaseFunctions.clientToken({}) as any;
+        return postSelfHosted<ClientTokenResult>('/api/spotify/client-token');
     },
 
     exchangeCode(data: { callbackUrl: string; code: string }): Promise<CallableResult<ExchangeCodeResult>> {
-        if (isSelfHostedBackend) {
-            return postSelfHosted<ExchangeCodeResult>('/api/spotify/exchange-code', data);
-        }
-
-        return firebaseFunctions.exchangeCode(data) as any;
+        return postSelfHosted<ExchangeCodeResult>('/api/spotify/exchange-code', data);
     },
 
     refreshToken(): Promise<CallableResult<ClientTokenResult>> {
-        if (isSelfHostedBackend) {
-            return postSelfHosted<ClientTokenResult>('/api/spotify/refresh-token');
-        }
-
-        return firebaseFunctions.refreshToken({}) as any;
-    },
-
-    isSpotifyUser(data: { email: string }) {
-        return firebaseFunctions.isSpotifyUser(data);
+        return postSelfHosted<ClientTokenResult>('/api/spotify/refresh-token');
     },
 
     linkSpotifyAccounts(data: { accessToken: string }) {
-        if (isSelfHostedBackend) {
-            return postSelfHosted<SessionResult>('/api/spotify/link-account', data);
-        }
-
-        return firebaseFunctions.linkSpotifyAccounts(data);
+        return postSelfHosted<SessionResult>('/api/spotify/link-account', data);
     },
 
     getMyParties(): Promise<CallableResult<MyParty[]>> {

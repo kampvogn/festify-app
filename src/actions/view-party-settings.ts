@@ -1,10 +1,7 @@
 import shuffleArr from 'lodash-es/shuffle';
 
-import { firebaseTrackIdSelector } from '../selectors/track';
 import { PartySettings, Playlist, PlaylistReference, Track } from '../state';
-import { isSelfHostedBackend } from '../util/backend';
 import { backendFunctions } from '../util/backend-functions';
-import firebase from '../util/firebase';
 import { fetchWithAccessToken } from '../util/spotify-auth';
 
 export type Actions =
@@ -101,26 +98,8 @@ export const updateUserPlaylists = (playlists: Playlist[]) => ({
 
 /* Utils */
 
-export async function flushQueue(partyId: string, tracks: Track[]) {
-    if (isSelfHostedBackend) {
-        await backendFunctions.flushQueue({ partyId });
-        return;
-    }
-
-    if (!firebase) {
-        throw new Error('Firebase is unavailable in this build.');
-    }
-
-    const trackRemoveObject = {};
-    tracks
-        .filter((t) => !t.played_at)
-        .map((t) => firebaseTrackIdSelector(t))
-        .forEach((k) => (trackRemoveObject[k] = null));
-    await Promise.all([
-        firebase.database().ref('/tracks').child(partyId).update(trackRemoveObject),
-        firebase.database().ref('/votes').child(partyId).remove(),
-        firebase.database().ref('/votes_by_user').child(partyId).remove(),
-    ]);
+export async function flushQueue(partyId: string, _tracks: Track[]) {
+    await backendFunctions.flushQueue({ partyId });
 }
 
 export async function loadPlaylists(): Promise<Playlist[]> {
@@ -146,100 +125,11 @@ export async function loadPlaylists(): Promise<Playlist[]> {
 }
 
 export async function insertPlaylist(
-    partyId: string,
-    partyCreationDate: number,
-    playlist: Playlist,
-    shuffle: boolean = false,
-    progress?: (amount: number) => any,
+    _partyId: string,
+    _partyCreationDate: number,
+    _playlist: Playlist,
+    _shuffle: boolean = false,
+    _progress?: (amount: number) => any,
 ) {
-    if (isSelfHostedBackend) {
-        throw new Error('Fallback playlists are not available in self-hosted mode yet.');
-    }
-
-    async function fetchTracks(
-        playlist: Playlist,
-        progress?: (amount: number) => any,
-    ): Promise<SpotifyApi.TrackObjectFull[]> {
-        let url = `/users/${playlist.reference.userId}/playlists/${playlist.reference.id}/tracks?market=from_token`;
-
-        const tracks: SpotifyApi.TrackObjectFull[] = [];
-
-        do {
-            const resp = await fetchWithAccessToken(url);
-            const { items, next }: SpotifyApi.PlaylistTrackResponse = await resp.json();
-            const trackItems = items
-                .filter((it) => it && !it.is_local && it.track.id && it.track.is_playable !== false)
-                .map((it) => it.track);
-
-            if (typeof progress === 'function') {
-                progress(items.length);
-            }
-
-            url = next;
-            tracks.push(...trackItems);
-        } while (url);
-
-        return tracks;
-    }
-    async function removeFallbackTracks(partyId: string): Promise<void> {
-        if (!firebase) {
-            throw new Error('Firebase is unavailable in this build.');
-        }
-
-        const fallbackTracks: Record<string, Track> | null = (
-            await firebase
-                .database()
-                .ref('/tracks')
-                .child(partyId)
-                .orderByChild('vote_count')
-                .equalTo(0)
-                .once('value')
-        ).val();
-
-        if (!fallbackTracks) {
-            return;
-        }
-
-        const removeObject = {};
-        Object.keys(fallbackTracks)
-            .filter((k) => !fallbackTracks[k].played_at)
-            .forEach((k) => (removeObject[k] = null));
-
-        await firebase.database().ref('/tracks').child(partyId).update(removeObject);
-    }
-
-    if (typeof progress === 'function') {
-        progress(0);
-    }
-
-    let [tracks] = await Promise.all([
-        fetchTracks(playlist, progress),
-        removeFallbackTracks(partyId),
-    ]);
-
-    if (shuffle) {
-        tracks = shuffleArr(tracks);
-    }
-
-    const now = Date.now();
-    const base = now - partyCreationDate;
-    const updateObject = tracks.reduce((acc, track, index) => {
-        acc[`spotify-${track.id}`] = {
-            added_at: now + index,
-            is_fallback: true,
-            order: base + index,
-            reference: {
-                id: track.id,
-                provider: 'spotify',
-            },
-            vote_count: 0,
-        };
-        return acc;
-    }, {});
-
-    if (!firebase) {
-        throw new Error('Firebase is unavailable in this build.');
-    }
-
-    await firebase.database().ref('/tracks').child(partyId).update(updateObject);
+    throw new Error('Fallback playlists are not yet available in self-hosted mode.');
 }

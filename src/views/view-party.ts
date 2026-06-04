@@ -43,11 +43,7 @@ interface PartyViewDispatch {
     trackDragEnter;
     trackDragOver;
     trackDragDrop;
-    triggerFacebookLogin: () => void;
-    triggerGithubLogin: () => void;
-    triggerGoogleLogin: () => void;
     triggerSpotifyLogin: () => void;
-    triggerTwitterLogin: () => void;
 }
 
 /* tslint:disable:max-line-length */
@@ -181,62 +177,15 @@ const PartyView = (props: PartyViewProps & PartyViewDispatch) => html`
         .opened=${props.displayLoginModal}
         @iron-overlay-canceled=${props.closeLoginModal}
     >
-        <h2>
-            ${!props.isFollowUpSignIn ? 'Please sign in to vote' : 'Further action required'}
-        </h2>
+        <h2>Please sign in to vote</h2>
 
         <paper-dialog-scrollable>
-            <p>
-                ${!props.isFollowUpSignIn
-                    ? "The party owner requires all guests to sign in to prevent cheating, but you wouldn't do that anyway, would ya? 😛"
-                    : 'There already seems to be an account connected to that email. Please sign in with one of your previous social accounts. You will only need to do this once.'}
-            </p>
+            <p>The party owner requires all guests to sign in to prevent cheating, but you wouldn't do that anyway, would ya? 😛</p>
 
-            <paper-button
-                raised
-                class="login facebook"
-                @click=${props.triggerFacebookLogin}
-                .disabled=${!props.enabledProviders.facebook}
-            >
-                <iron-icon icon="social:facebook"></iron-icon>
-                <span>Sign in with</span>
-                Facebook
-            </paper-button>
-            <paper-button
-                raised
-                class="login google"
-                @click=${props.triggerGoogleLogin}
-                .disabled=${!props.enabledProviders.google}
-            >
-                <iron-icon icon="social:google"></iron-icon>
-                <span>Sign in with</span>
-                Google
-            </paper-button>
-            <paper-button
-                raised
-                class="login twitter"
-                @click=${props.triggerTwitterLogin}
-                .disabled=${!props.enabledProviders.twitter}
-            >
-                <iron-icon icon="social:twitter"></iron-icon>
-                <span>Sign in with</span>
-                Twitter
-            </paper-button>
-            <paper-button
-                raised
-                class="login github"
-                @click=${props.triggerGithubLogin}
-                .disabled=${!props.enabledProviders.github}
-            >
-                <iron-icon icon="social:github"></iron-icon>
-                <span>Sign in with</span>
-                GitHub
-            </paper-button>
             <paper-button
                 raised
                 class="login spotify"
                 @click=${props.triggerSpotifyLogin}
-                .disabled=${!props.enabledProviders.spotify}
             >
                 <iron-icon icon="social:spotify"></iron-icon>
                 <span>Sign in with</span>
@@ -254,11 +203,7 @@ const PartyView = (props: PartyViewProps & PartyViewDispatch) => html`
 /* tslint:enable */
 
 const allEnabled: EnabledProvidersList = {
-    facebook: true,
-    github: true,
-    google: true,
     spotify: true,
-    twitter: true,
 };
 
 const mapStateToProps = (state: State): PartyViewProps => ({
@@ -275,11 +220,7 @@ const mapDispatchToProps: PartyViewDispatch = {
     trackDragEnter: queueDragEnter,
     trackDragOver: queueDragOver,
     trackDragDrop: queueDragDrop,
-    triggerFacebookLogin: () => triggerOAuthLogin('facebook'),
-    triggerGithubLogin: () => triggerOAuthLogin('github'),
-    triggerGoogleLogin: () => triggerOAuthLogin('google'),
     triggerSpotifyLogin: () => triggerOAuthLogin('spotify'),
-    triggerTwitterLogin: () => triggerOAuthLogin('twitter'),
 };
 
 const Base = connect(mapStateToProps, mapDispatchToProps)(PartyView);

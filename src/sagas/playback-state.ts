@@ -1,6 +1,5 @@
 import isEqual from 'lodash-es/isEqual';
-import { Task } from 'redux-saga';
-import { call, cancelled, fork, join, put, select, take, takeEvery } from 'redux-saga/effects';
+import { call, fork, put, select, take, takeEvery } from 'redux-saga/effects';
 
 import {
     becomePlaybackMaster,
@@ -18,8 +17,7 @@ import { togglePlaybackFinish, TOGGLE_PLAYBACK_START } from '../actions/playback
 import { isPartyOwnerSelector, playbackSelector } from '../selectors/party';
 import { currentTrackSelector, tracksEqual } from '../selectors/track';
 import { Playback, State, Track } from '../state';
-import firebase, { firebaseNS } from '../util/firebase';
-import { backendConfig, isSelfHostedBackend } from '../util/backend';
+import { backendConfig } from '../util/backend';
 import { backendFunctions } from '../util/backend-functions';
 import { takeEveryWithState } from '../util/saga';
 
@@ -32,11 +30,7 @@ function* handleTakeOver() {
         return;
     }
 
-    yield put(
-        updatePlaybackState({
-            master_id: player.instanceId,
-        }),
-    );
+    yield put(updatePlaybackState({ master_id: player.instanceId }));
 }
 
 function* handlePlayPause() {
@@ -53,7 +47,6 @@ function* handlePlayPause() {
     yield put(
         updatePlaybackState({
             playing: startingPlayback,
-            // Always claim mastership when starting playback to handle stale master_id
             master_id: startingPlayback ? player.instanceId : (playback.master_id || player.instanceId),
             last_change: Date.now(),
         }),
@@ -64,7 +57,7 @@ function* handlePlayPause() {
     }
 }
 
-function* persistSelfHostedPlaybackState(partyId: string) {
+function* persistPlaybackState(partyId: string) {
     while (true) {
         const oldState: Playback | null = yield select(playbackSelector);
         const { payload }: ReturnType<typeof updatePlaybackState> = yield take(UPDATE_PLAYBACK_STATE);
@@ -79,99 +72,7 @@ function* persistSelfHostedPlaybackState(partyId: string) {
             ('last_position_ms' in payload && oldState.last_position_ms !== payload.last_position_ms);
         const update = isChangingState ? { ...payload, last_change: Date.now() } : payload;
 
-        yield call(backendFunctions.updatePlaybackState, {
-            partyId,
-            playback: update,
-        });
-    }
-}
-
-function* handleFirebase(partyId: string) {
-    if (!firebase) {
-        return;
-    }
-
-    let isPlaybackMaster = false;
-    try {
-        const playbackRef = firebase
-            .database()
-            .ref('/parties')
-            .child(partyId)
-            .child('playback');
-        const playbackDisconnect = playbackRef.onDisconnect();
-
-        // Setup deinitialization for playback state on player disconnect
-        const becomeTask: Task = yield takeEvery(BECOME_PLAYBACK_MASTER, function*() {
-            isPlaybackMaster = true;
-            yield call(() =>
-                playbackDisconnect.update({
-                    playing: false,
-                    master_id: null,
-                }),
-            );
-        });
-
-        // Cancel deinitialization for playback state on player disconnect
-        const resignTask: Task = yield takeEvery(RESIGN_PLAYBACK_MASTER, function*() {
-            isPlaybackMaster = false;
-            yield call(() => playbackDisconnect.cancel());
-        });
-
-        // Persist playback state changes in Firebase
-        const stateTask: Task = yield fork(function*() {
-            while (true) {
-                const oldState: Playback | null = yield select(playbackSelector);
-                const { payload }: ReturnType<typeof updatePlaybackState> = yield take(
-                    UPDATE_PLAYBACK_STATE,
-                );
-
-                if (!(yield select(isPartyOwnerSelector))) {
-                    continue;
-                }
-
-                // Exclude last_change for non-playback-state-changing updates to prevent
-                // infinite update loop
-                const { last_change, ...rest } = payload;
-                const isChangingState =
-                    !oldState ||
-                    oldState.playing !== payload.playing ||
-                    oldState.last_position_ms !== payload.last_position_ms;
-                const update = isChangingState
-                    ? {
-                          ...payload,
-                          last_change: firebaseNS.database!.ServerValue.TIMESTAMP,
-                      }
-                    : rest;
-
-                playbackRef.update(update);
-            }
-        });
-
-        const updateTask: Task = yield takeEveryWithState(
-            [UPDATE_PARTY, UPDATE_PLAYBACK_STATE],
-            playbackSelector,
-            handlePartyUpdate,
-        );
-
-        // Wait for cancellation of this saga (occurs when party is left)
-        yield join(becomeTask, resignTask, stateTask, updateTask);
-    } finally {
-        // Remove playback state from DB when party is left while we're playing
-        if (yield cancelled() && isPlaybackMaster) {
-            if (!firebase) {
-                return;
-            }
-
-            firebase
-                .database()
-                .ref('/parties')
-                .child(partyId)
-                .child('playback')
-                .update({
-                    master_id: null,
-                    playing: false,
-                });
-        }
+        yield call(backendFunctions.updatePlaybackState, { partyId, playback: update });
     }
 }
 
@@ -180,12 +81,10 @@ function* handlePartyUpdate(
     oldPlayback: Playback | null,
     newPlayback: Playback | null,
 ) {
-    // These cases occur when party is left
     if (!oldPlayback || !newPlayback) {
         return;
     }
 
-    // Check if the master status of the player changed
     if (oldPlayback.master_id !== newPlayback.master_id) {
         if (newPlayback.master_id === (yield select((state: State) => state.player.instanceId))) {
             yield put(becomePlaybackMaster());
@@ -194,45 +93,33 @@ function* handlePartyUpdate(
         }
     }
 
-    // Prevent endless loop because timestamp always changes
-    oldPlayback = {
-        ...oldPlayback,
-        last_change: newPlayback.last_change,
-    };
+    oldPlayback = { ...oldPlayback, last_change: newPlayback.last_change };
 
-    // Make sure updatePlaybackState fires when state changes through updatePartyAction
     if (action.type !== UPDATE_PLAYBACK_STATE && !isEqual(newPlayback, oldPlayback)) {
         yield put(updatePlaybackState(newPlayback));
     }
 }
 
-/**
- * Handles local playback state and syncs changes from and to Firebase
- */
 export function* managePlaybackState(partyId: string) {
     yield takeEvery(INSTALL_PLAYBACK_MASTER, handleTakeOver);
     yield takeEvery(TOGGLE_PLAYBACK_START, handlePlayPause);
 
-    if (isSelfHostedBackend) {
-        yield fork(persistSelfHostedPlaybackState, partyId);
-        yield takeEveryWithState([UPDATE_PARTY, UPDATE_PLAYBACK_STATE], playbackSelector, handlePartyUpdate);
+    yield fork(persistPlaybackState, partyId);
+    yield takeEveryWithState([UPDATE_PARTY, UPDATE_PLAYBACK_STATE], playbackSelector, handlePartyUpdate);
 
-        // Clear master_id when page unloads so the next session starts clean
-        yield call(() => {
-            window.addEventListener('beforeunload', () => {
-                const url = `${backendConfig.apiUrl}/api/parties/${encodeURIComponent(partyId)}/playback`;
-                fetch(url, {
-                    method: 'POST',
-                    credentials: 'include',
-                    keepalive: true,
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ partyId, playback: { master_id: null, playing: false } }),
-                });
-            }, { once: true });
-        });
-    } else {
-        yield fork(handleFirebase, partyId);
-    }
+    // Clear master_id when page unloads so the next session starts clean
+    yield call(() => {
+        window.addEventListener('beforeunload', () => {
+            const url = `${backendConfig.apiUrl}/api/parties/${encodeURIComponent(partyId)}/playback`;
+            fetch(url, {
+                method: 'POST',
+                credentials: 'include',
+                keepalive: true,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ partyId, playback: { master_id: null, playing: false } }),
+            });
+        }, { once: true });
+    });
 
     yield fork(manageLocalPlayer, partyId);
 
@@ -245,11 +132,7 @@ export function* managePlaybackState(partyId: string) {
             return;
         }
 
-        yield put(
-            updatePlaybackState({
-                last_position_ms: 0,
-            }),
-        );
+        yield put(updatePlaybackState({ last_position_ms: 0 }));
     });
 }
 

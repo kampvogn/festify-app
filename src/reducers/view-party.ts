@@ -1,7 +1,6 @@
 import { LOCATION_CHANGED } from '@festify/redux-little-router';
 
 import { Actions } from '../actions';
-import { REQUIRE_FOLLOW_UP_LOGIN } from '../actions/auth';
 import { CLEANUP_PARTY } from '../actions/party-data';
 import {
     CHANGE_DISPLAY_LOGIN_MODAL,
@@ -35,11 +34,6 @@ export default function(
                     !(action as any).payload.params || !(action as any).payload.params.query
                         ? null
                         : state.searchResult,
-            };
-        case REQUIRE_FOLLOW_UP_LOGIN:
-            return {
-                ...state,
-                loginModalOpen: true,
             };
         case SEARCH_START:
             return {

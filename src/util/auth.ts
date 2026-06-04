@@ -1,10 +1,5 @@
-import { User } from '@firebase/auth-types';
-
 import { UserCredentials } from '../state';
-
-import { isSelfHostedBackend } from './backend';
-import { backendFunctions, BackendUser, SessionResult } from './backend-functions';
-import firebase, { firebaseNS } from './firebase';
+import { backendFunctions, BackendUser } from './backend-functions';
 
 const SELF_HOSTED_AUTH_KEY = 'SelfHostedAuthData';
 
@@ -16,7 +11,6 @@ export class SelfHostedAuthData {
         }
         try {
             const parsed = JSON.parse(lsString);
-            // Support both old format {sessionToken, user} and new format {user}
             const user = parsed.user || parsed;
             return user && user.uid ? new SelfHostedAuthData(user) : null;
         } catch {
@@ -39,39 +33,17 @@ export class SelfHostedAuthData {
     }
 }
 
-export function currentAuthUser(): User | BackendUser | null {
-    if (isSelfHostedBackend) {
-        const data = SelfHostedAuthData.load();
-        return data ? data.user : null;
-    }
-
-    if (!firebase) {
-        return null;
-    }
-
-    return firebase.auth().currentUser;
-}
-
-export function currentBackendAuthUser(): BackendUser | null {
-    const user = currentAuthUser();
-    return isSelfHostedBackend ? (user as BackendUser | null) : null;
+export function currentAuthUser(): BackendUser | null {
+    const data = SelfHostedAuthData.load();
+    return data ? data.user : null;
 }
 
 export async function signOutAuth(): Promise<void> {
-    if (isSelfHostedBackend) {
-        SelfHostedAuthData.remove();
-        await backendFunctions.signOut();
-        return;
-    }
-
-    if (!firebase) {
-        return;
-    }
-
-    await firebase.auth().signOut();
+    SelfHostedAuthData.remove();
+    await backendFunctions.signOut();
 }
 
-export async function saveSelfHostedSession(data: SessionResult): Promise<BackendUser> {
+export async function saveSelfHostedSession(data: import('./backend-functions').SessionResult): Promise<BackendUser> {
     SelfHostedAuthData.save(data.user);
     return data.user;
 }
@@ -116,64 +88,28 @@ export class AuthData {
     }
 }
 
-export function getProvider(prov: Exclude<keyof UserCredentials, 'spotify' | 'firebase'>) {
-    const auth = firebaseNS.auth!;
-    switch (prov) {
-        case 'facebook':
-            return new auth.FacebookAuthProvider();
-        case 'github':
-            return new auth.GithubAuthProvider();
-        case 'google':
-            return new auth.GoogleAuthProvider();
-        case 'twitter':
-            return new auth.TwitterAuthProvider();
+export async function requireAuth(): Promise<BackendUser | null> {
+    const cached = SelfHostedAuthData.load();
+    if (cached) {
+        return cached.user;
     }
+
+    try {
+        const { data: meUser } = await backendFunctions.getMe();
+        if (meUser && meUser.uid) {
+            SelfHostedAuthData.save(meUser);
+            return meUser;
+        }
+    } catch {
+        // Not authenticated yet — fall through to create anonymous session
+    }
+
+    const { data } = await backendFunctions.anonymousAuth();
+    SelfHostedAuthData.save(data.user);
+    return data.user;
 }
 
-export async function requireAuth(): Promise<User | BackendUser | null> {
-    if (isSelfHostedBackend) {
-        // 1. Fast path: user info cached locally from prior session
-        const cached = SelfHostedAuthData.load();
-        if (cached) {
-            return cached.user;
-        }
-
-        // 2. Cookie may exist from a prior session — ask the server who we are
-        try {
-            const { data: meUser } = await backendFunctions.getMe();
-            if (meUser && meUser.uid) {
-                SelfHostedAuthData.save(meUser);
-                return meUser;
-            }
-        } catch {
-            // Not authenticated yet — fall through to create anonymous session
-        }
-
-        // 3. Create a new anonymous session; server sets httpOnly cookie
-        const { data } = await backendFunctions.anonymousAuth();
-        SelfHostedAuthData.save(data.user);
-        return data.user;
-    }
-
-    if (!firebase) {
-        return null;
-    }
-
-    const auth = firebase.auth();
-
-    if (auth.currentUser && auth.currentUser.uid) {
-        return Promise.resolve(auth.currentUser);
-    }
-
-    return new Promise<User>(resolve => {
-        const unsubscribe = auth.onAuthStateChanged(async user => {
-            unsubscribe();
-
-            if (user && user.uid) {
-                resolve(user);
-            } else {
-                resolve((await auth.signInAnonymously()).user!);
-            }
-        });
-    });
+// Kept for compatibility with reducers that check provider-linked status
+export function getProvider(_prov: Exclude<keyof UserCredentials, 'spotify' | 'firebase'>) {
+    throw new Error('Only Spotify login is supported.');
 }

@@ -1,12 +1,5 @@
-import mapValues from 'lodash-es/mapValues';
-import omit from 'lodash-es/omit';
-
-import { firebaseTrackIdSelector } from '../selectors/track';
 import { Track, TrackReference } from '../state';
-import { requireAuth } from '../util/auth';
-import { isSelfHostedBackend } from '../util/backend';
 import { backendFunctions } from '../util/backend-functions';
-import firebase, { firebaseNS } from '../util/firebase';
 
 export type Actions =
     | ReturnType<typeof removeTrackAction>
@@ -34,137 +27,22 @@ export const setVoteAction = (ref: TrackReference, vote: boolean) => ({
 
 /* Utils */
 
-export function markTrackAsPlayed(partyId: string, ref: TrackReference): Promise<void> {
-    if (isSelfHostedBackend) {
-        // Track cleanup is handled by removeTrackAction when the track ends.
-        // Setting played_at here would immediately hide the track from the queue.
-        return Promise.resolve();
-    }
-
-    if (!firebase) {
-        throw new Error('Firebase is unavailable in this build.');
-    }
-
-    return firebase
-        .database()
-        .ref('/tracks')
-        .child(partyId)
-        .child(firebaseTrackIdSelector(ref))
-        .child('played_at')
-        .set(firebaseNS.database!.ServerValue.TIMESTAMP);
+export function markTrackAsPlayed(_partyId: string, _ref: TrackReference): Promise<void> {
+    return Promise.resolve();
 }
 
-/**
- * Pins a track to the top of the queue.
- *
- * @param partyId the ID of the affected party
- * @param ref the ref of the track to pin
- */
 export function pinTrack(partyId: string, ref: TrackReference): Promise<void> {
-    if (isSelfHostedBackend) {
-        return backendFunctions.pinTrack({
-            partyId,
-            ref,
-        }).then(() => undefined);
-    }
-
-    if (!firebase) {
-        throw new Error('Firebase is unavailable in this build.');
-    }
-
-    return firebase
-        .database()
-        .ref('/tracks')
-        .child(partyId)
-        .child(firebaseTrackIdSelector(ref))
-        .child('order')
-        .set(Number.MIN_SAFE_INTEGER + 1);
+    return backendFunctions.pinTrack({ partyId, ref }).then(() => undefined);
 }
 
 export async function removeTrack(partyId: string, track: Track, moveToHistory: boolean) {
-    const trackId = firebaseTrackIdSelector(track);
-
-    if (isSelfHostedBackend) {
-        await backendFunctions.removeTrack({
-            partyId,
-            ref: track.reference,
-            moveToHistory,
-        });
-        return;
-    }
-
-    if (!firebase) {
-        throw new Error('Firebase is unavailable in this build.');
-    }
-
-    const updates: any[] = [
-        firebase
-            .database()
-            .ref('/tracks')
-            .child(partyId)
-            .child(trackId)
-            .set(null),
-        firebase
-            .database()
-            .ref('/votes')
-            .child(partyId)
-            .child(trackId)
-            .set(null),
-        firebase
-            .database()
-            .ref('/votes_by_user')
-            .child(partyId)
-            .transaction(votes => mapValues(votes, userVotes => omit(userVotes, trackId))),
-    ];
-    if (moveToHistory) {
-        updates.push(
-            firebase
-                .database()
-                .ref('/tracks_played')
-                .child(partyId)
-                .push(track),
-        );
-    }
-
-    await Promise.all(updates);
+    await backendFunctions.removeTrack({
+        partyId,
+        ref: track.reference,
+        moveToHistory,
+    });
 }
 
 export async function setVote(partyId: string, ref: TrackReference, vote: boolean) {
-    const authUser = await requireAuth();
-    if (!authUser) {
-        throw new Error('Authentication is required to vote on tracks.');
-    }
-
-    const { uid } = authUser;
-    const trackId = firebaseTrackIdSelector(ref);
-
-    if (isSelfHostedBackend) {
-        await backendFunctions.setTrackVote({
-            partyId,
-            ref,
-            vote,
-        });
-        return;
-    }
-
-    if (!firebase) {
-        throw new Error('Firebase is unavailable in this build.');
-    }
-
-    const a = firebase
-        .database()
-        .ref('/votes')
-        .child(partyId)
-        .child(trackId)
-        .child(uid)
-        .set(vote);
-    const b = firebase
-        .database()
-        .ref('/votes_by_user')
-        .child(partyId)
-        .child(uid)
-        .child(trackId)
-        .set(vote);
-
-    await Promise.all([a, b]);
+    await backendFunctions.setTrackVote({ partyId, ref, vote });
 }

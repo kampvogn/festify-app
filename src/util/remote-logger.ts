@@ -1,4 +1,4 @@
-import { backendConfig, isSelfHostedBackend } from './backend';
+import { backendConfig } from './backend';
 
 // Tags whose console.log output is forwarded to the backend debug endpoint.
 // Read on the server with: docker logs -f festify-api 2>&1 | grep BROWSER
@@ -43,8 +43,6 @@ function isWatched(args: any[]): boolean {
 }
 
 export function installRemoteLogger() {
-    if (!isSelfHostedBackend) return;
-
     const origLog = console.log.bind(console);
     const origWarn = console.warn.bind(console);
     const origError = console.error.bind(console);

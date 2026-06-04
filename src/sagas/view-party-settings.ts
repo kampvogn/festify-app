@@ -24,28 +24,17 @@ import {
     UPDATE_PARTY_NAME,
 } from '../actions/view-party-settings';
 import { PartyViews } from '../routing';
-import { isPartyOwnerSelector } from '../selectors/party';
+import { isPartyOwnerSelector, partyIdSelector } from '../selectors/party';
 import { queueTracksSelector } from '../selectors/track';
 import { hasConnectedSpotifyAccountSelector } from '../selectors/users';
 import { Playlist, State, Track } from '../state';
-import firebase from '../util/firebase';
+import { backendFunctions } from '../util/backend-functions';
 
-function* changePartySetting(partyId: string, ac: ReturnType<typeof changePartySettingAction>) {
+function* changePartySetting(_partyId: string, _ac: ReturnType<typeof changePartySettingAction>) {
     if (!(yield select(isPartyOwnerSelector))) {
         return;
     }
-
-    if (!firebase) {
-        return;
-    }
-
-    yield firebase
-        .database()
-        .ref('/parties')
-        .child(partyId)
-        .child('settings')
-        .child(ac.payload.setting)
-        .set(ac.payload.value);
+    // Party settings persistence is not yet available on the self-hosted backend.
 }
 
 function* fetchPlaylists() {
@@ -119,16 +108,15 @@ function* insertPlaylist(partyId: string, ac: ReturnType<typeof insertPlaylistSt
 }
 
 function* updatePartyName(partyId: string, ac: ReturnType<typeof updatePartyNameAction>) {
-    if (!firebase) {
+    if (!(yield select(isPartyOwnerSelector))) {
         return;
     }
-
-    yield firebase
-        .database()
-        .ref('/parties')
-        .child(partyId)
-        .child('name')
-        .set(ac.payload);
+    try {
+        yield call(backendFunctions.renameParty, partyId, ac.payload);
+    } catch (err) {
+        // Non-fatal: the name update failed, but the party is still running
+        console.warn('Failed to rename party:', err);
+    }
 }
 
 export function* managePartySettings(partyId: string) {
