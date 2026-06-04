@@ -92,6 +92,17 @@ app.get('/api/health', async () => {
     return { ok: true };
 });
 
+// Debug log relay — browser sends tagged console output here.
+// Read with: docker logs -f festify-api 2>&1 | grep BROWSER
+app.post('/api/debug/log', async (request) => {
+    const body = request.body as { entries?: { level: string; msg: string; ts: number }[] };
+    for (const entry of body?.entries ?? []) {
+        const elapsed = ((Date.now() - entry.ts) / 1000).toFixed(1);
+        process.stderr.write(`[BROWSER/${entry.level.toUpperCase()} +${elapsed}s] ${entry.msg}\n`);
+    }
+    return { ok: true };
+});
+
 app.post('/api/auth/anonymous', async (request, reply) => {
     const result = await createAnonymousSession();
     setSessionCookie(reply, result.sessionToken);

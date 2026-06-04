@@ -5,7 +5,11 @@
 /// <reference path="../node_modules/spotify-web-api-js/src/typings/spotify-api.d.ts"/>
 
 import { backendConfig } from './util/backend';
+import { installRemoteLogger } from './util/remote-logger';
 import './util/raven';
+
+installRemoteLogger();
+
 import './store';
 import './views/app-shell';
 

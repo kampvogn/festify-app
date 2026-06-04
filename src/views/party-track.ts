@@ -24,7 +24,7 @@ import {
 } from '../selectors/track';
 import { playbackSelector } from '../selectors/party';
 import { hasConnectedSpotifyAccountSelector } from '../selectors/users';
-import { Metadata, State, Track, TrackReference } from '../state';
+import { Metadata, Playback, State, Track, TrackReference } from '../state';
 import sharedStyles from '../util/shared-styles';
 
 interface PartyTrackProps {
@@ -36,7 +36,9 @@ interface PartyTrackProps {
     isMusicPlaying: boolean;
     isPlayingTrack: boolean;
     metadata: Metadata | null;
+    playback: Playback | null;
     progressPercent: number | null;
+    progressRemainingMs: number | null;
     progressText: string | null;
     showRemoveButton: boolean;
     showTakeoverButton: boolean;
@@ -201,7 +203,9 @@ export const PartyTrack = (props: PartyTrackRenderProps) => html`
         .progress-fill {
             background: var(--primary-color);
             height: 100%;
+            width: 100%;
             transform-origin: left;
+            transform: scaleX(0);
         }
 
         .progress-text {
@@ -276,7 +280,7 @@ export const PartyTrack = (props: PartyTrackRenderProps) => html`
             ? html`
                   <div class="progress-row">
                       <div class="progress-track">
-                          <div class="progress-fill" style="width: ${props.progressPercent}%"></div>
+                          <div class="progress-fill"></div>
                       </div>
                       <div class="progress-text">${props.progressText}</div>
                   </div>
@@ -377,6 +381,7 @@ export const createMapStateToPropsFactory = (
             const playback = playbackSelector(state);
             const isPlayingTrack = isPlayingSelector(state, ownProps.trackid);
             let progressPercent: number | null = null;
+            let progressRemainingMs: number | null = null;
             let progressText: string | null = null;
 
             if (isPlayingTrack && metadata && playback) {
@@ -391,6 +396,7 @@ export const createMapStateToPropsFactory = (
                 );
                 if (durationMs > 0) {
                     progressPercent = Math.max(0, Math.min(100, (currentMs / durationMs) * 100));
+                    progressRemainingMs = Math.max(0, durationMs - currentMs);
                     progressText = `${formatTrackTime(currentMs)} / ${formatTrackTime(durationMs)}`;
                 }
             }
@@ -407,7 +413,9 @@ export const createMapStateToPropsFactory = (
                     state.party.currentParty.playback.playing,
                 isPlayingTrack,
                 metadata,
+                playback,
                 progressPercent,
+                progressRemainingMs,
                 progressText,
                 showRemoveButton: showRemoveTrackButtonSelector(state, ownProps.trackid),
                 showTakeoverButton: showTakeoverButtonSelector(state, ownProps.trackid),
@@ -434,9 +442,81 @@ export const PartyTrackElementBase = withFit<PartyTrackOwnProps, PartyTrackRende
     },
 )(HTMLElement);
 
-const PartyTrackElement = connect(
+const PartyTrackConnectedBase = connect(
     createMapStateToPropsFactory(singleTrackSelector),
     mapDispatchToProps,
 )(PartyTrackElementBase);
+
+class PartyTrackElement extends (PartyTrackConnectedBase as any) {
+    private _progressTimer: ReturnType<typeof setInterval> | null = null;
+
+    connectedCallback() {
+        super.connectedCallback();
+        // Update the time text every second using interpolated position.
+        // We deliberately do NOT call render() here — that would reset the CSS transition
+        // with stale Redux props (last_position_ms only updates every ~5s from the poll).
+        this._progressTimer = setInterval(() => this._tickText(), 1000);
+    }
+
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        if (this._progressTimer !== null) {
+            clearInterval(this._progressTimer);
+            this._progressTimer = null;
+        }
+    }
+
+    render() {
+        super.render();
+        this._updateFill();
+    }
+
+    // Called only on real Redux state changes (via render override).
+    // Sets up a CSS transition from current playback fraction to scaleX(1) over
+    // the remaining track duration — identical technique to playback-progress-bar.
+    private _updateFill() {
+        const props: PartyTrackProps = (this as any).renderProps;
+        if (!props || props.progressPercent == null || props.progressRemainingMs == null) return;
+
+        const root: ParentNode = (this as any).shadowRoot || this;
+        const fill = root.querySelector('.progress-fill') as HTMLElement | null;
+        if (!fill) return;
+
+        const fraction = props.progressPercent / 100;
+        const remainingMs = props.progressRemainingMs;
+        const isPlaying = props.isMusicPlaying;
+
+        window.requestAnimationFrame(() => {
+            fill.style.transition = 'none';
+            fill.style.transform = `scaleX(${fraction})`;
+            window.requestAnimationFrame(() => {
+                fill.style.transition = isPlaying ? `transform ${remainingMs}ms linear` : 'none';
+                if (isPlaying) {
+                    fill.style.transform = 'scaleX(1)';
+                }
+            });
+        });
+    }
+
+    // Called every second by setInterval to update the time text with interpolated position,
+    // without touching the fill bar (which is driven by CSS transition).
+    private _tickText() {
+        const props: PartyTrackProps = (this as any).renderProps;
+        if (!props || !props.isPlayingTrack || !props.metadata || !props.playback) return;
+
+        const root: ParentNode = (this as any).shadowRoot || this;
+        const textEl = root.querySelector('.progress-text') as HTMLElement | null;
+        if (!textEl) return;
+
+        const durationMs = props.metadata.durationMs || 0;
+        if (durationMs <= 0) return;
+
+        const { last_position_ms, last_change, playing } = props.playback;
+        const currentMs = Math.max(0, Math.min(durationMs,
+            last_position_ms + (playing ? Date.now() - last_change : 0),
+        ));
+        textEl.textContent = `${formatTrackTime(currentMs)} / ${formatTrackTime(durationMs)}`;
+    }
+}
 
 customElements.define('party-track', PartyTrackElement);

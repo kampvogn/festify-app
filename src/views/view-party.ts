@@ -104,7 +104,7 @@ const PartyView = (props: PartyViewProps & PartyViewDispatch) => html`
         }
 
         iron-pages {
-            padding-top: 176px;
+            padding-top: 220px;
         }
 
         app-drawer-layout:not([narrow]) [drawer-toggle] {

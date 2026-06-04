@@ -105,7 +105,7 @@ function* loadMetadataForNewTracks(_) {
                 ids.map(id => call(fetchWithAnonymousAuth, `/tracks/${id}?market=${country}`)),
             );
             const tracks: SpotifyApi.TrackObjectFull[] = yield all(
-                responses.map(resp => call([resp, resp.json])),
+                responses.map(resp => call(() => resp.json())),
             );
             yield put(updateMetadata(tracks));
         } catch (err) {
