@@ -196,6 +196,13 @@ export const backendFunctions = {
         return postSelfHosted('/api/parties/' + encodeURIComponent(data.partyId) + '/tracks/flush', data);
     },
 
+    updatePartySettings(partyId: string, settings: Partial<import('../state').PartySettings>) {
+        return patchSelfHosted<{ ok: boolean }>(
+            '/api/parties/' + encodeURIComponent(partyId) + '/settings',
+            settings,
+        );
+    },
+
     updatePlaybackState(data: { partyId: string; playback: any }) {
         return postSelfHosted('/api/parties/' + encodeURIComponent(data.partyId) + '/playback', data);
     },

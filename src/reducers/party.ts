@@ -11,7 +11,7 @@ import {
     UPDATE_USER_VOTES,
 } from '../actions/party-data';
 import { SET_VOTE } from '../actions/queue';
-import { firebaseTrackIdSelector } from '../selectors/track';
+import { trackKey } from '../selectors/track';
 import { ConnectionState, PartyState, Track } from '../state';
 
 const VOTE_FACTOR = 1e12;
@@ -49,7 +49,7 @@ export default function(
             };
         case SET_VOTE:
             const [ref, vote] = action.payload;
-            const trackId = firebaseTrackIdSelector(ref);
+            const trackId = trackKey(ref);
 
             const trackList: Record<string, Track> = { ...state.tracks };
             if (state.tracks && state.tracks[trackId]) {

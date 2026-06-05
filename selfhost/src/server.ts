@@ -167,6 +167,31 @@ app.patch('/api/parties/:partyId', async (request, reply) => {
     return result.rows[0];
 });
 
+app.patch('/api/parties/:partyId/settings', async (request, reply) => {
+    const params = z.object({ partyId: z.string().uuid() }).parse(request.params);
+    const body = z.object({
+        allow_anonymous_voters: z.boolean().optional(),
+        allow_explicit_tracks: z.boolean().optional(),
+        allow_multi_track_add: z.boolean().optional(),
+        tv_mode_text: z.string().max(200).optional(),
+        maximum_track_length: z.number().positive().nullable().optional(),
+    }).parse(request.body);
+
+    const user = await requireSessionUser(request);
+    const result = await pool.query(
+        `UPDATE parties
+         SET settings = settings || $1::jsonb, updated_at = now()
+         WHERE id = $2 AND created_by = $3
+         RETURNING id`,
+        [JSON.stringify(body), params.partyId, user.id],
+    );
+    if (result.rowCount === 0) {
+        reply.code(403);
+        return { error: 'Only the party owner may perform this action.' };
+    }
+    return { ok: true };
+});
+
 app.delete('/api/parties/:partyId', async (request, reply) => {
     const params = z.object({ partyId: z.string().uuid() }).parse(request.params);
     const user = await requireSessionUser(request);

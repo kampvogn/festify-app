@@ -15,7 +15,7 @@ import { changeDisplayLoginModal } from '../actions/view-party';
 import { isPartyOwnerSelector, isPlaybackMasterSelector } from '../selectors/party';
 import {
     currentTrackSelector,
-    firebaseTrackIdSelector,
+    trackKey,
     singleTrackSelector,
     tracksEqual,
 } from '../selectors/track';
@@ -57,7 +57,7 @@ function* removeTrack(partyId: string, ac: ReturnType<typeof removeTrackAction>)
     try {
         const [ref, moveToHistory] = ac.payload;
         const state: State = yield select();
-        const track = singleTrackSelector(state, firebaseTrackIdSelector(ref));
+        const track = singleTrackSelector(state, trackKey(ref));
 
         yield call(doRemoveTrack, partyId, track, moveToHistory);
         yield call(refreshParty, partyId);

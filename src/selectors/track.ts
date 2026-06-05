@@ -4,7 +4,7 @@ import { Metadata, State, Track, TrackReference } from '../state';
 
 import { playbackSelector } from './party';
 
-export const firebaseTrackIdSelector = (t: Track | TrackReference): string => {
+export const trackKey = (t: Track | TrackReference): string => {
     const ref = (t as Track).reference || (t as TrackReference);
     return `${ref.provider}-${ref.id}`;
 };
@@ -52,7 +52,7 @@ export const sortedTracksFactory = (
                 .filter((t) => t.reference && t.reference.provider && t.reference.id)
                 .filter((t) => !t.played_at)
                 .filter((t) => {
-                    const fbId = firebaseTrackIdSelector(t);
+                    const fbId = trackKey(t);
                     return !(fbId in meta) || meta[fbId].durationMs <= maxDurationMs;
                 })
                 .sort((a, b) => a.order - b.order);
@@ -66,7 +66,7 @@ export const currentTrackSelector = createSelector(queueTracksSelector, (tracks)
 );
 
 export const currentTrackIdSelector = createSelector(currentTrackSelector, (track) =>
-    track ? firebaseTrackIdSelector(track) : null,
+    track ? trackKey(track) : null,
 );
 
 export function tracksEqual(a: Track | null | undefined, b: Track | null | undefined): boolean {
@@ -117,7 +117,7 @@ export const loadFanartTracksSelector = createSelector(
     (meta, tracks) =>
         tracks
             .slice(0, 2)
-            .map((t) => firebaseTrackIdSelector(t))
+            .map((t) => trackKey(t))
             .filter((id) => id in meta && !meta[id].background)
             .map((id) => [id, meta[id]] as [string, Metadata]),
 );
@@ -128,7 +128,7 @@ export const loadMetadataSelector = createSelector(
     (meta, tracks) =>
         tracks
             .filter((t) => {
-                const fbId = firebaseTrackIdSelector(t);
+                const fbId = trackKey(t);
                 return !(fbId in meta) || meta[fbId].durationMs == null;
             })
             .map((t) => t.reference),

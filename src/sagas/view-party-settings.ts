@@ -30,11 +30,15 @@ import { hasConnectedSpotifyAccountSelector } from '../selectors/users';
 import { Playlist, State, Track } from '../state';
 import { backendFunctions } from '../util/backend-functions';
 
-function* changePartySetting(_partyId: string, _ac: ReturnType<typeof changePartySettingAction>) {
+function* changePartySetting(partyId: string, ac: ReturnType<typeof changePartySettingAction>) {
     if (!(yield select(isPartyOwnerSelector))) {
         return;
     }
-    // Party settings persistence is not yet available on the self-hosted backend.
+    try {
+        yield call(backendFunctions.updatePartySettings, partyId, { [ac.payload.setting]: ac.payload.value });
+    } catch (err) {
+        console.warn('Failed to update party setting:', err);
+    }
 }
 
 function* fetchPlaylists() {
