@@ -24,7 +24,7 @@ import {
     UPDATE_PARTY_NAME,
 } from '../actions/view-party-settings';
 import { PartyViews } from '../routing';
-import { isPartyOwnerSelector, partyIdSelector } from '../selectors/party';
+import { isPartyOwnerSelector } from '../selectors/party';
 import { queueTracksSelector } from '../selectors/track';
 import { hasConnectedSpotifyAccountSelector } from '../selectors/users';
 import { Playlist, State, Track } from '../state';

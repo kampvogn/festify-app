@@ -4,6 +4,7 @@ import { call, put, select, takeEvery, takeLatest } from 'redux-saga/effects';
 import { showToast } from '../actions';
 import { currentAuthUser } from '../util/auth';
 import { backendFunctions, BackendUser } from '../util/backend-functions';
+import { fetchWithAccessToken } from '../util/spotify-auth';
 import { NOTIFY_AUTH_STATUS_KNOWN } from '../actions/auth';
 import {
     createNewParty,
@@ -47,8 +48,20 @@ function* createParty() {
     }
 
     const userDisplayName = backendUser.displayName || backendUser.email || backendUser.uid;
-    const userCountry = 'DK';
     const hasPremium = Boolean(backendUser.spotifyIsPremium);
+
+    let userCountry = 'US';
+    try {
+        const resp: Response = yield call(fetchWithAccessToken, '/me');
+        if (resp.ok) {
+            const spotifyUser: SpotifyApi.CurrentUsersProfileResponse = yield resp.json();
+            if (spotifyUser.country) {
+                userCountry = spotifyUser.country;
+            }
+        }
+    } catch {
+        // Non-fatal: fall back to 'US' market
+    }
 
     if (!hasPremium) {
         const e = new Error('To create parties and play music on Festify, you need a Spotify Premium account.');

@@ -1,6 +1,6 @@
 {
   "name": "festify-client",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Festify Client App",
   "main": "src/index.ts",
   "repository": "https://github.com/Festify/app.git",

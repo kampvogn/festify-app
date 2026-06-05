@@ -20,7 +20,6 @@ export default function(
         credentials: {
             spotify: defaultUser(),
         },
-        needsFollowUpSignInWithProviders: null,
         playlists: [],
     },
     action: Actions,
@@ -43,14 +42,7 @@ export default function(
 
     switch (action.type) {
         case CHANGE_DISPLAY_LOGIN_MODAL:
-            if (state.needsFollowUpSignInWithProviders) {
-                return {
-                    ...state,
-                    needsFollowUpSignInWithProviders: null,
-                };
-            } else {
-                return state;
-            }
+            return state;
         case EXCHANGE_CODE_FAIL:
             return reduceAuthProvider(action.payload.provider, {
                 authorizing: false,

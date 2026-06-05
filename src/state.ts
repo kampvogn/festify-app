@@ -209,28 +209,8 @@ export interface UserCredentials {
     spotify: AuthProviderStatus<SpotifyApi.UserObjectPrivate>;
 }
 
-export type EnabledProvidersList = {
-    [k in OAuthLoginProviders]: boolean;
-};
-
-// tslint:disable-next-line:no-namespace
-export namespace EnabledProvidersList {
-    export function enable(overrides: OAuthLoginProviders[]): EnabledProvidersList {
-        const result = { spotify: false };
-        overrides.forEach(prov => (result[prov] = true));
-        return result;
-    }
-}
-
 export interface UserState {
     credentials: UserCredentials;
-
-    /**
-     * The list of providers the user may sign in with, if he is required
-     * to sign in with one of his previous OAuth providers. Otherwise null.
-     */
-    needsFollowUpSignInWithProviders: EnabledProvidersList | null;
-
     playlists: Playlist[];
 }
 

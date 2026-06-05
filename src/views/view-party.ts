@@ -13,7 +13,7 @@ import { queueDragDrop, queueDragEnter, queueDragOver } from '../actions';
 import { triggerOAuthLogin } from '../actions/auth';
 import { changeDisplayLoginModal } from '../actions/view-party';
 import { PartyViews } from '../routing';
-import { EnabledProvidersList, Party, State } from '../state';
+import { Party, State } from '../state';
 import sharedStyles from '../util/shared-styles';
 
 import './party-queue';
@@ -27,8 +27,6 @@ import './search-bar';
 
 interface PartyViewProps {
     displayLoginModal: boolean;
-    enabledProviders: EnabledProvidersList;
-    isFollowUpSignIn: boolean;
     party:
         | Party
         | {
@@ -202,16 +200,8 @@ const PartyView = (props: PartyViewProps & PartyViewDispatch) => html`
 `;
 /* tslint:enable */
 
-const allEnabled: EnabledProvidersList = {
-    spotify: true,
-};
-
 const mapStateToProps = (state: State): PartyViewProps => ({
     displayLoginModal: state.partyView.loginModalOpen,
-    enabledProviders: state.user.needsFollowUpSignInWithProviders
-        ? state.user.needsFollowUpSignInWithProviders
-        : allEnabled,
-    isFollowUpSignIn: !!state.user.needsFollowUpSignInWithProviders,
     party: state.party.currentParty || { created_by: '', name: '' },
     view: (state.router.result || { subView: PartyViews.Queue }).subView,
 });

@@ -189,6 +189,7 @@ app.patch('/api/parties/:partyId/settings', async (request, reply) => {
         reply.code(403);
         return { error: 'Only the party owner may perform this action.' };
     }
+    void publishPartySnapshot(params.partyId);
     return { ok: true };
 });
 
