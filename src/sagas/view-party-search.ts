@@ -83,9 +83,7 @@ function* doSearch(action) {
     yield put(searchFinish({
         trackRecords,
         albums: combined.albums,
-        playlists: allowExplicit
-            ? combined.playlists
-            : combined.playlists,
+        playlists: combined.playlists,
     }));
 }
 

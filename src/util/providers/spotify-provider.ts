@@ -48,7 +48,7 @@ export class SpotifyProvider implements MusicProvider {
     async getAlbumTracks(albumId: string, countryCode: string): Promise<SearchResult[]> {
         const results: SearchResult[] = [];
         let url: string | null =
-            `/albums/${albumId}/tracks?limit=50&market=${countryCode}`;
+            `/albums/${encodeURIComponent(albumId)}/tracks?limit=50&market=${countryCode}`;
 
         while (url) {
             const resp = await fetchWithAnonymousAuth(url);
@@ -69,7 +69,7 @@ export class SpotifyProvider implements MusicProvider {
     async getPlaylistTracks(playlistId: string, countryCode: string): Promise<SearchResult[]> {
         const results: SearchResult[] = [];
         let url: string | null =
-            `/playlists/${playlistId}/tracks?limit=50&market=${countryCode}`;
+            `/playlists/${encodeURIComponent(playlistId)}/tracks?limit=50&market=${countryCode}`;
 
         while (url) {
             const resp = await fetchWithAnonymousAuth(url);
