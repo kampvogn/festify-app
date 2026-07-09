@@ -1,7 +1,15 @@
 import chunk from 'lodash-es/chunk';
 
 import { Image, Metadata, PlayerDevice } from '../../state';
-import { MusicProvider, SearchResult, WebPlayerHandle, WebPlaybackState } from '../music-provider';
+import {
+    AlbumSearchResult,
+    CombinedSearchResults,
+    MusicProvider,
+    PlaylistSearchResult,
+    SearchResult,
+    WebPlayerHandle,
+    WebPlaybackState,
+} from '../music-provider';
 import { requireAccessToken, requireAnonymousAuth, fetchWithAccessToken, fetchWithAnonymousAuth } from '../spotify-auth';
 
 export class SpotifyProvider implements MusicProvider {
@@ -15,24 +23,67 @@ export class SpotifyProvider implements MusicProvider {
         return requireAnonymousAuth();
     }
 
-    async search(query: string, countryCode: string, limit = 10): Promise<SearchResult[]> {
+    async search(query: string, countryCode: string, limit = 10): Promise<CombinedSearchResults> {
+        const q = encodeURIComponent(query.replace('-', ' ').trim());
+        const url = `/search?type=track,album,playlist&limit=${limit}&q=${q}`;
+
+        const resp = await fetchWithAnonymousAuth(url);
+        if (!resp.ok) {
+            const body = await resp.text();
+            throw new Error(`Spotify search failed with ${resp.status}: ${body}`);
+        }
+
+        const data: SpotifyApi.TrackSearchResponse & SpotifyApi.AlbumSearchResponse & SpotifyApi.PlaylistSearchResponse =
+            await resp.json();
+
+        const tracks = (data.tracks?.items ?? []).map(spotifyTrackToSearchResult);
+        const albums = (data.albums?.items ?? []).map(spotifyAlbumToAlbumResult);
+        const playlists = (data.playlists?.items ?? [])
+            .filter(Boolean)
+            .map(spotifyPlaylistToPlaylistResult);
+
+        return { tracks, albums, playlists };
+    }
+
+    async getAlbumTracks(albumId: string, countryCode: string): Promise<SearchResult[]> {
         const results: SearchResult[] = [];
         let url: string | null =
-            `/search?type=track&limit=${limit}` +
-            `&q=${encodeURIComponent(query.replace('-', ' ').trim())}`;
+            `/albums/${albumId}/tracks?limit=50&market=${countryCode}`;
 
-        while (results.length < 20 && url) {
+        while (url) {
             const resp = await fetchWithAnonymousAuth(url);
             if (!resp.ok) {
                 const body = await resp.text();
-                throw new Error(`Spotify search failed with ${resp.status}: ${body}`);
+                throw new Error(`Spotify album tracks failed with ${resp.status}: ${body}`);
             }
+            const data: SpotifyApi.AlbumTracksResponse = await resp.json();
+            for (const track of data.items) {
+                results.push(spotifySimpleTrackToSearchResult(track));
+            }
+            url = data.next;
+        }
 
-            const data: SpotifyApi.TrackSearchResponse = await resp.json();
-            for (const track of data.tracks.items) {
-                results.push(spotifyTrackToSearchResult(track));
+        return results;
+    }
+
+    async getPlaylistTracks(playlistId: string, countryCode: string): Promise<SearchResult[]> {
+        const results: SearchResult[] = [];
+        let url: string | null =
+            `/playlists/${playlistId}/tracks?limit=50&market=${countryCode}`;
+
+        while (url) {
+            const resp = await fetchWithAnonymousAuth(url);
+            if (!resp.ok) {
+                const body = await resp.text();
+                throw new Error(`Spotify playlist tracks failed with ${resp.status}: ${body}`);
             }
-            url = data.tracks.next;
+            const data: SpotifyApi.PlaylistTrackResponse = await resp.json();
+            for (const item of data.items) {
+                if (item.track && item.track.type === 'track') {
+                    results.push(spotifyTrackToSearchResult(item.track as SpotifyApi.TrackObjectFull));
+                }
+            }
+            url = data.next;
         }
 
         return results;
@@ -199,6 +250,45 @@ class SpotifyWebPlayerHandle implements WebPlayerHandle {
         errorEvents.forEach(ev => this.player.on(ev as any, listener as any));
         return () => errorEvents.forEach(ev => this.player.removeListener(ev as any, listener as any));
     }
+}
+
+function spotifyAlbumToAlbumResult(album: SpotifyApi.AlbumObjectSimplified): AlbumSearchResult {
+    const releaseYear = album.release_date ? album.release_date.split('-')[0] : '';
+    return {
+        id: album.id,
+        provider: 'spotify',
+        name: album.name,
+        artists: album.artists.map(a => a.name),
+        cover: (album.images as Image[]).filter(img => img.width && img.height),
+        totalTracks: album.total_tracks,
+        releaseYear,
+    };
+}
+
+function spotifyPlaylistToPlaylistResult(
+    playlist: SpotifyApi.PlaylistObjectSimplified,
+): PlaylistSearchResult {
+    return {
+        id: playlist.id,
+        provider: 'spotify',
+        name: playlist.name,
+        owner: playlist.owner?.display_name || playlist.owner?.id || '',
+        cover: (playlist.images as Image[]).filter(img => img.width && img.height),
+        totalTracks: playlist.tracks?.total ?? 0,
+    };
+}
+
+function spotifySimpleTrackToSearchResult(track: SpotifyApi.TrackObjectSimplified): SearchResult {
+    return {
+        id: track.id,
+        provider: 'spotify',
+        name: track.name,
+        artists: track.artists.map(a => a.name),
+        cover: [],
+        durationMs: track.duration_ms,
+        isPlayable: track.is_playable !== false,
+        explicit: track.explicit,
+    };
 }
 
 function spotifyTrackToSearchResult(track: SpotifyApi.TrackObjectFull): SearchResult {

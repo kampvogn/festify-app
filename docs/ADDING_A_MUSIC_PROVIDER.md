@@ -9,7 +9,14 @@ Festify's music service layer is built around a `MusicProvider` interface. Addin
 Create `src/util/providers/<name>-provider.ts` and implement every method in `MusicProvider` (`src/util/music-provider.ts`):
 
 ```typescript
-import { MusicProvider, SearchResult, WebPlayerHandle } from '../music-provider';
+import {
+    AlbumSearchResult,
+    CombinedSearchResults,
+    MusicProvider,
+    PlaylistSearchResult,
+    SearchResult,
+    WebPlayerHandle,
+} from '../music-provider';
 import { Metadata, PlayerDevice } from '../../state';
 
 export class AppleMusicProvider implements MusicProvider {
@@ -18,8 +25,10 @@ export class AppleMusicProvider implements MusicProvider {
     getUserToken(): Promise<string> { /* ... */ }
     getClientToken(): Promise<string> { /* ... */ }
 
-    search(query: string, countryCode: string, limit?: number): Promise<SearchResult[]> { /* ... */ }
+    search(query: string, countryCode: string, limit?: number): Promise<CombinedSearchResults> { /* ... */ }
     getMetadata(ids: string[], countryCode: string): Promise<Record<string, Metadata>> { /* ... */ }
+    getAlbumTracks(albumId: string, countryCode: string): Promise<SearchResult[]> { /* ... */ }
+    getPlaylistTracks(playlistId: string, countryCode: string): Promise<SearchResult[]> { /* ... */ }
 
     getDevices(): Promise<PlayerDevice[]> { /* ... */ }
     transferPlayback(deviceId: string): Promise<void> { /* ... */ }
@@ -38,8 +47,10 @@ export const appleMusicProvider = new AppleMusicProvider();
 |--------|---------|-------|
 | `getUserToken()` | OAuth access token for the signed-in user | Used for playback and device control |
 | `getClientToken()` | Anonymous/client credentials token | Used for search without a logged-in user |
-| `search(query, countryCode, limit?)` | `SearchResult[]` | Results are filtered for explicit content by the saga |
+| `search(query, countryCode, limit?)` | `CombinedSearchResults` | Must return `{ tracks, albums, playlists }`. Tracks are filtered for explicit content by the saga. |
 | `getMetadata(ids, countryCode)` | `Record<string, Metadata>` | Keys must follow `${provider}-${id}` format |
+| `getAlbumTracks(albumId, countryCode)` | `SearchResult[]` | Called when the user drills into an album from search results |
+| `getPlaylistTracks(playlistId, countryCode)` | `SearchResult[]` | Called when the user drills into a playlist from search results |
 | `getDevices()` | `PlayerDevice[]` | Return `[]` if the service has no Connect-style device API |
 | `transferPlayback(deviceId)` | `Promise<void>` | Throw if not supported |
 | `setVolume(volumePercent)` | `Promise<void>` | `volumePercent` is 0–100 |
@@ -47,6 +58,16 @@ export const appleMusicProvider = new AppleMusicProvider();
 | `play(deviceId, trackId, positionMs)` | `Promise<void>` | `positionMs` is milliseconds from track start |
 
 `SearchResult.id` and `Metadata` keys must be stable, unique IDs within the provider's namespace. The full track key used throughout the app is `${provider}-${id}` (e.g. `apple-music-abc123`).
+
+**`CombinedSearchResults` shape:**
+```typescript
+interface CombinedSearchResults {
+    tracks: SearchResult[];
+    albums: AlbumSearchResult[];
+    playlists: PlaylistSearchResult[];
+}
+```
+If the provider does not support album or playlist search, return empty arrays for those fields.
 
 ---
 

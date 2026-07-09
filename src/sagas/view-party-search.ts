@@ -7,6 +7,10 @@ import { UPDATE_PARTY } from '../actions/party-data';
 import { setVoteAction, SET_VOTE } from '../actions/queue';
 import {
     changeTrackSearchInput,
+    drillDownFail,
+    drillDownFinish,
+    drillDownStart,
+    TRIGGER_DRILL_DOWN,
     searchFail,
     searchFinish,
     searchStart,
@@ -15,7 +19,7 @@ import {
 import { PartyViews } from '../routing';
 import { queueRouteSelector, searchRouteSelector } from '../selectors/routes';
 import { State, Track, Metadata } from '../state';
-import { SearchResult } from '../util/music-provider';
+import { CombinedSearchResults, SearchResult } from '../util/music-provider';
 import { getProvider } from '../util/provider-registry';
 
 function* doSearch(action) {
@@ -39,16 +43,83 @@ function* doSearch(action) {
     }: State = yield select();
 
     const provider = getProvider('spotify');
-    let results: SearchResult[] = [];
+    let combined: CombinedSearchResults = { tracks: [], albums: [], playlists: [] };
     try {
-        results = yield call([provider, 'search'], s, currentParty!.country);
+        combined = yield call([provider, 'search'], s, currentParty!.country);
     } catch (e) {
-        yield put(searchFail(e));
+        yield put(searchFail(e as Error));
         return;
     }
 
     const allowExplicit = !currentParty!.settings || currentParty!.settings!.allow_explicit_tracks;
-    const filtered = allowExplicit ? results : results.filter(r => !r.explicit);
+    const filteredTracks = allowExplicit
+        ? combined.tracks
+        : combined.tracks.filter(r => !r.explicit);
+
+    const trackRecords = filteredTracks.reduce((acc, r, i) => {
+        acc[`${r.provider}-${r.id}`] = {
+            added_at: Date.now(),
+            is_fallback: false,
+            order: i,
+            reference: { provider: r.provider, id: r.id },
+            vote_count: 0,
+        } as Track;
+        return acc;
+    }, {} as Record<string, Track>);
+
+    const metadata = filteredTracks.reduce((acc, r) => {
+        acc[`${r.provider}-${r.id}`] = {
+            artists: r.artists,
+            cover: r.cover,
+            durationMs: r.durationMs,
+            isPlayable: r.isPlayable,
+            isrc: r.isrc,
+            name: r.name,
+        } as Metadata;
+        return acc;
+    }, {} as Record<string, Metadata>);
+
+    yield put(updateMetadata(metadata));
+    yield put(searchFinish({
+        trackRecords,
+        albums: combined.albums,
+        playlists: allowExplicit
+            ? combined.playlists
+            : combined.playlists,
+    }));
+}
+
+interface DrillDownAction {
+    type: typeof TRIGGER_DRILL_DOWN;
+    payload: { id: string; type: 'album' | 'playlist'; name: string };
+}
+
+function* doDrillDown(action: DrillDownAction) {
+    const {
+        party: { currentParty },
+    }: State = yield select();
+    if (!currentParty) return;
+
+    const provider = getProvider('spotify');
+    const { id, type, name } = action.payload;
+
+    yield put(drillDownStart());
+
+    let tracks: SearchResult[] = [];
+    try {
+        if (type === 'album') {
+            tracks = yield call([provider, 'getAlbumTracks'], id, currentParty.country);
+        } else {
+            tracks = yield call([provider, 'getPlaylistTracks'], id, currentParty.country);
+        }
+    } catch (e) {
+        yield put(drillDownFail(e as Error));
+        return;
+    }
+
+    const allowExplicit =
+        !currentParty.settings || currentParty.settings.allow_explicit_tracks;
+    const filtered = allowExplicit ? tracks : tracks.filter(r => !r.explicit);
 
     const trackRecords = filtered.reduce((acc, r, i) => {
         acc[`${r.provider}-${r.id}`] = {
@@ -74,7 +145,7 @@ function* doSearch(action) {
     }, {} as Record<string, Metadata>);
 
     yield put(updateMetadata(metadata));
-    yield put(searchFinish(trackRecords));
+    yield put(drillDownFinish({ type, id, name, tracks: trackRecords }));
 }
 
 function* enforceMultiVoteSetting(ac: ReturnType<typeof setVoteAction>) {
@@ -110,4 +181,5 @@ export default function* () {
     yield takeLatest(LOCATION_CHANGED, doSearch);
     yield takeEvery(CHANGE_TRACK_SEARCH_INPUT, updateUrl);
     yield takeEvery(SET_VOTE, enforceMultiVoteSetting);
+    yield takeLatest(TRIGGER_DRILL_DOWN, doDrillDown);
 }

@@ -4,6 +4,10 @@ import { Actions } from '../actions';
 import { CLEANUP_PARTY } from '../actions/party-data';
 import {
     CHANGE_DISPLAY_LOGIN_MODAL,
+    CLOSE_DRILL_DOWN,
+    DRILL_DOWN_FAIL,
+    DRILL_DOWN_FINISH,
+    DRILL_DOWN_START,
     SEARCH_FAIL,
     SEARCH_FINISH,
     SEARCH_START,
@@ -17,6 +21,11 @@ export default function(
         searchInProgress: false,
         searchError: null,
         searchResult: null,
+        searchAlbums: null,
+        searchPlaylists: null,
+        drillDown: null,
+        drillDownInProgress: false,
+        drillDownError: null,
         userMenuOpen: false,
     },
     action: Actions,
@@ -52,7 +61,34 @@ export default function(
                 ...state,
                 searchInProgress: false,
                 searchError: null,
-                searchResult: action.payload,
+                searchResult: (action as any).payload.trackRecords,
+                searchAlbums: (action as any).payload.albums,
+                searchPlaylists: (action as any).payload.playlists,
+            };
+        case DRILL_DOWN_START:
+            return {
+                ...state,
+                drillDownInProgress: true,
+                drillDownError: null,
+            };
+        case DRILL_DOWN_FINISH:
+            return {
+                ...state,
+                drillDownInProgress: false,
+                drillDownError: null,
+                drillDown: (action as any).payload,
+            };
+        case DRILL_DOWN_FAIL:
+            return {
+                ...state,
+                drillDownInProgress: false,
+                drillDownError: (action as any).payload,
+            };
+        case CLOSE_DRILL_DOWN:
+            return {
+                ...state,
+                drillDown: null,
+                drillDownError: null,
             };
         case TOGGLE_USER_MENU:
             return {
@@ -65,6 +101,11 @@ export default function(
                 searchInProgress: false,
                 searchError: null,
                 searchResult: null,
+                searchAlbums: null,
+                searchPlaylists: null,
+                drillDown: null,
+                drillDownInProgress: false,
+                drillDownError: null,
                 userMenuOpen: false,
             };
         default:

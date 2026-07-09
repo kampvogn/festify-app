@@ -152,13 +152,45 @@ export interface PartyState {
     userVotes: Record<string, boolean> | null;
 }
 
+export interface AlbumSearchResult {
+    id: string;
+    provider: string;
+    name: string;
+    artists: string[];
+    cover: Image[];
+    totalTracks: number;
+    releaseYear: string;
+}
+
+export interface PlaylistSearchResult {
+    id: string;
+    provider: string;
+    name: string;
+    owner: string;
+    cover: Image[];
+    totalTracks: number;
+}
+
+export interface DrillDownState {
+    type: 'album' | 'playlist';
+    id: string;
+    name: string;
+    tracks: Record<string, Track>;
+}
+
 export interface PartyViewState {
     loginModalOpen: boolean;
     searchInProgress: boolean;
     searchError: Error | null;
     searchResult: Record<string, Track> | null;
+    searchAlbums: AlbumSearchResult[] | null;
+    searchPlaylists: PlaylistSearchResult[] | null;
+    drillDown: DrillDownState | null;
+    drillDownInProgress: boolean;
+    drillDownError: Error | null;
     userMenuOpen: boolean;
 }
+
 
 export interface PlayerDevice {
     id: string | null;

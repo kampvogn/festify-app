@@ -1,4 +1,4 @@
-import { Image, Metadata, PlayerDevice } from '../state';
+import { AlbumSearchResult, Image, Metadata, PlayerDevice, PlaylistSearchResult } from '../state';
 
 export interface SearchResult {
     id: string;
@@ -10,6 +10,14 @@ export interface SearchResult {
     isPlayable: boolean;
     isrc?: string;
     explicit: boolean;
+}
+
+export { AlbumSearchResult, PlaylistSearchResult };
+
+export interface CombinedSearchResults {
+    tracks: SearchResult[];
+    albums: AlbumSearchResult[];
+    playlists: PlaylistSearchResult[];
 }
 
 export interface WebPlaybackState {
@@ -35,8 +43,10 @@ export interface MusicProvider {
     getUserToken(): Promise<string>;
     getClientToken(): Promise<string>;
 
-    search(query: string, countryCode: string, limit?: number): Promise<SearchResult[]>;
+    search(query: string, countryCode: string, limit?: number): Promise<CombinedSearchResults>;
     getMetadata(ids: string[], countryCode: string): Promise<Record<string, Metadata>>;
+    getAlbumTracks(albumId: string, countryCode: string): Promise<SearchResult[]>;
+    getPlaylistTracks(playlistId: string, countryCode: string): Promise<SearchResult[]>;
 
     getDevices(): Promise<PlayerDevice[]>;
     transferPlayback(deviceId: string): Promise<void>;
