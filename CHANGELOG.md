@@ -8,6 +8,8 @@ The project stays on `0.x.y` while the self-hosted migration is still in progres
 
 ### Added
 
+- Search now covers albums and playlists in addition to tracks, with results grouped into three sections. Tapping an album or playlist drills into its tracks, which can be voted on individually.
+- A new React 18 + Vite + Tailwind UI lives alongside the Polymer app under `src-react/` (`npm run dev` / `npm run build:react`). All views have been ported; the Polymer app remains the production entry point until switchover.
 - Spotify Connect device selection is now available on the host path, with playback transfer from the party header.
 - The currently playing queue item now shows visible track progress and elapsed time.
 - Self-hosted party screens now subscribe to API-pushed snapshot events over SSE instead of relying on manual refresh.

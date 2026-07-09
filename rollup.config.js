@@ -63,7 +63,7 @@ export default {
                 },
             },
         }),
-        typescript(),
+        typescript({ check: false }),
         copy({
             'node_modules/@webcomponents/webcomponentsjs': dist('node_modules/@webcomponents/webcomponentsjs'),
             'assets': dist(''),

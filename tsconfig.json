@@ -12,7 +12,7 @@
     "forceConsistentCasingInFileNames": true,
     "noImplicitThis": true,
     "strictNullChecks": true,
-    "suppressImplicitAnyIndexErrors": true,
+    "suppressImplicitAnyIndexErrors": false,
     "noUnusedLocals": false,
     "plugins": [
       {

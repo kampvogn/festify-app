@@ -8,6 +8,7 @@ package-lock.json # we use yarn
 .tmp/
 build/
 build-mobile/
+build-react/
 dist/
 .env*
 /images/manifest/*.png
