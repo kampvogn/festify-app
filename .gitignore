@@ -1,7 +1,8 @@
 # Package Managers
 node_modules/
 npm-debug.log
-package-lock.json # we use yarn
+# we use yarn
+package-lock.json
 .rpt2_cache
 
 # Build Output
