@@ -54,7 +54,6 @@
     "bundlesize": "^0.17.0",
     "connect-history-api-fallback": "^1.5.0",
     "rollup": "^0.66.6",
-    "rollup-plugin-babel-minify": "^6.0.0",
     "rollup-plugin-browsersync": "^0.2.6",
     "rollup-plugin-commonjs": "^9.1.0",
     "rollup-plugin-copy": "^0.2.3",
@@ -66,13 +65,14 @@
     "rollup-plugin-visualizer": "^0.9.0",
     "spotify-web-api-js": "^1.1.0",
     "tailwindcss": "^4.3.1",
+    "terser": "^5.44.0",
     "tslint": "^5.8.0",
     "typescript": "^5.9.3",
     "typescript-lit-html-plugin": "^0.9.0",
     "vite": "^6.4.3"
   },
   "scripts": {
-    "build": "NODE_ENV=production rollup -c",
+    "build": "NODE_ENV=production rollup -c && node node_modules/terser/bin/terser build/index.js --compress --mangle --source-map \"content='build/index.js.map',url='index.js.map'\" --output build/index.min.js && mv build/index.min.js build/index.js && mv build/index.min.js.map build/index.js.map",
     "build:react": "node node_modules/vite/bin/vite.js build --config vite.config.mts",
     "dev": "node node_modules/vite/bin/vite.js --config vite.config.mts",
     "check-size": "bundlesize",

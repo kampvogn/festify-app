@@ -1,6 +1,5 @@
 import historyApi from 'connect-history-api-fallback';
 import * as fs from 'fs';
-import minify from 'rollup-plugin-babel-minify';
 import cjs from 'rollup-plugin-commonjs';
 import copy from 'rollup-plugin-copy';
 import nodeGlobals from 'rollup-plugin-node-globals';
@@ -80,7 +79,9 @@ export default {
                 collapseWhitespace: true
             }
         }) : null,
-        isProduction ? minify({ comments: false }) : null,
+        // Minification happens in a separate terser pass after rollup (see the
+        // build script) — rollup-plugin-babel-minify is unmaintained and
+        // crashes with current @babel/traverse versions.
         !!process.env.ROLLUP_WATCH ? browsersync({
             port: process.env.PORT || 3000,
             server: {
